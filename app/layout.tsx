@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     apple: "/apple-touch-icon.png",
   },
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "Stellar", statusBarStyle: "black-translucent" },
+  appleWebApp: { capable: true, title: "Stellar", statusBarStyle: "default" },
 };
 
 export default function RootLayout({
@@ -40,3 +40,4 @@ export default function RootLayout({
     </html>
   );
 }
+
