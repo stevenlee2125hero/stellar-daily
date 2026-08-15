@@ -1,0 +1,2 @@
+import { adminUser, credentialsReady, getSessionUser } from "../../../lib/auth";
+export async function GET(request:Request){if(!credentialsReady())return Response.json({error:"server_not_configured"},{status:503});const user=await getSessionUser(request);return user?Response.json({ok:true,user,isAdmin:user===adminUser()},{headers:{"Cache-Control":"no-store"}}):Response.json({error:"unauthorized"},{status:401})}
