@@ -72,6 +72,12 @@ header{height:52px;background:#fbfbfdd9;backdrop-filter:saturate(180%) blur(20px
 .date-range{display:flex;align-items:center;gap:6px;margin-left:8px;padding:4px 6px;background:#f5f5f7;border-radius:10px}.date-range input{width:116px;border:0;background:transparent;color:#626267;font:inherit;font-size:12px;outline:0}.date-range span{color:#a1a1a6;font-size:11px}.date-range button{width:24px;height:24px;border:0;border-radius:50%;background:#fff;color:#86868b;display:grid;place-items:center;cursor:pointer}
 @media(max-width:760px){.date-range{margin-left:4px;gap:2px;padding:3px}.date-range input{width:92px;font-size:11px}.date-range span{font-size:10px}.date-range button{width:22px;height:22px}}
 
+/* Keep the iPhone status-bar inset outside the header content box. */
+@media(max-width:760px){
+ body{padding-top:env(safe-area-inset-top)}
+ header{height:52px;padding:0 16px;top:0}
+}
+
 /* Selected-text narration */
 .reading-launch{position:fixed;right:22px;bottom:24px;z-index:125;display:flex;align-items:center;gap:8px;min-height:48px;padding:0 18px;border:0;border-radius:999px;background:#0071e3;color:#fff;font-size:14px;font-weight:650;box-shadow:0 14px 36px #0068d14d;cursor:pointer}
 .reading-launch svg{flex:none}
