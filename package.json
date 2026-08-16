@@ -11,7 +11,8 @@
     "start": "vinext start",
     "test": "npm run build && node --test tests/rendered-html.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "deploy:cloudflare": "npx @vinext/cloudflare@1.0.0-beta.2 deploy"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",
