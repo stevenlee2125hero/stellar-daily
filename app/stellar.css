@@ -74,8 +74,8 @@ header{height:52px;background:#fbfbfdd9;backdrop-filter:saturate(180%) blur(20px
 
 /* Keep the iPhone status-bar inset outside the header content box. */
 @media(max-width:760px){
- body{padding-top:env(safe-area-inset-top)}
- header{height:52px;padding:0 16px;top:0}
+ body{padding-top:max(env(safe-area-inset-top),76px)}
+ header{height:52px;padding:0 16px;top:max(env(safe-area-inset-top),76px)}
 }
 
 /* Selected-text narration */
