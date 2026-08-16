@@ -80,3 +80,16 @@ article,.knowledge{-webkit-user-select:text;user-select:text}
  .reading-status span{font-size:15px}.reading-status small{font-size:12px}
 }
 
+/* Compact story cards and article narration controls */
+.story-reading{display:flex;align-items:center;gap:7px;margin:0 0 7px}.story-reading button{border:0;min-height:32px;border-radius:8px;padding:0 10px;font-size:12px;font-weight:600;cursor:pointer}.story-read{display:flex;align-items:center;gap:6px;background:#e8f2ff;color:#0068d1}.story-settings{background:#f5f5f7;color:#626267}
+.reading-settings{position:fixed;right:22px;bottom:86px;z-index:145;width:min(330px,calc(100vw - 28px));background:#fff;border:1px solid #00000012;border-radius:16px;padding:15px;box-shadow:0 20px 60px #0003}.reading-settings>div{display:flex;align-items:center;justify-content:space-between;margin-bottom:13px}.reading-settings>div>button{width:30px;height:30px;border:0;border-radius:50%;display:grid;place-items:center;background:#f5f5f7}.reading-settings label{display:flex;align-items:center;justify-content:space-between;gap:14px;color:#626267;font-size:13px;margin-top:10px}.reading-settings label span{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;background:#f5f5f7;border-radius:9px;padding:3px}.reading-settings label button{min-width:54px;height:32px;border:0;border-radius:7px;background:transparent;color:#626267;font-size:12px}.reading-settings label button.active{background:#fff;color:#0068d1;font-weight:650;box-shadow:0 1px 4px #0002}
+.feed article{padding:18px 20px;gap:10px;margin-bottom:8px;border-radius:16px}.story-body h3,.story-toggle h3{font-size:clamp(21px,2.2vw,28px);line-height:1.24;margin:7px 0}.summary{font-size:15px;line-height:1.54;margin:6px 0}.meta{margin-top:10px}.actions{gap:6px}.actions button{width:34px;height:34px}
+
+@media(max-width:760px){
+ .feed article{grid-template-columns:30px minmax(0,1fr);padding:14px 14px 13px;gap:8px;margin-bottom:7px;border-radius:15px}
+ .story-number{width:28px;height:28px}.story-reading{margin-bottom:5px}.story-reading button{min-height:34px;font-size:12px}
+ .story-body h3,.story-toggle h3{font-size:21px;line-height:1.25;margin:6px 0}.summary{font-size:15px;line-height:1.5;margin:5px 0}.kicker{font-size:12px}.meta{font-size:12px;margin-top:8px}.meta button{font-size:13px;min-height:34px}
+ .actions{margin-top:6px;gap:7px}.actions button{width:38px;height:38px;flex-basis:38px}.full-text{font-size:16px;line-height:1.72;margin-top:14px;padding-top:14px}
+ .reading-settings{right:12px;bottom:calc(90px + env(safe-area-inset-bottom));border-radius:15px}
+}
+
