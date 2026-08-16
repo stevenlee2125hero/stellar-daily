@@ -63,3 +63,17 @@ header{height:52px;background:#fbfbfdd9;backdrop-filter:saturate(180%) blur(20px
  button,a{-webkit-tap-highlight-color:transparent}.actions button,.story-toggle,.date-current,nav button{cursor:pointer}
 }
 
+/* Selected-text narration */
+.reading-selection{position:fixed;z-index:140;display:flex;align-items:center;gap:7px;min-height:42px;padding:0 14px;border:0;border-radius:10px;background:#1d1d1f;color:#fff;font-size:14px;font-weight:650;box-shadow:0 10px 30px #0004;cursor:pointer;transform:translateY(0)}
+.reading-selection::before{content:"";position:absolute;top:-6px;left:18px;width:12px;height:12px;background:#1d1d1f;transform:rotate(45deg);border-radius:2px}
+.reading-selection svg{position:relative;z-index:1;color:#73b7ff}.reading-selection::selection{background:transparent}
+.reading-bar{position:fixed;left:50%;bottom:24px;z-index:130;width:min(520px,calc(100vw - 32px));min-height:66px;transform:translateX(-50%);display:grid;grid-template-columns:minmax(0,1fr) 44px 44px;align-items:center;gap:7px;padding:10px 11px 10px 16px;background:#1d1d1ff2;color:#fff;border:1px solid #ffffff1f;border-radius:18px;box-shadow:0 18px 50px #0005;backdrop-filter:blur(24px)}
+.reading-status{min-width:0;display:grid;grid-template-columns:24px minmax(0,1fr);align-items:center;column-gap:8px}.reading-status>svg{grid-row:1/3;color:#73b7ff}.reading-status span{font-size:14px;font-weight:650}.reading-status small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#ffffffa6;font-size:11px;margin-top:2px}.reading-bar>button{width:40px;height:40px;border:0;border-radius:50%;background:#ffffff16;color:#fff;display:grid;place-items:center;cursor:pointer}.reading-bar>button:last-child{background:#ff453a1f;color:#ff6961}
+article,.knowledge{-webkit-user-select:text;user-select:text}
+
+@media(max-width:760px){
+ .reading-selection{min-height:46px;padding:0 16px;border-radius:12px;font-size:16px}
+ .reading-bar{bottom:calc(88px + env(safe-area-inset-bottom));width:calc(100vw - 24px);min-height:70px;border-radius:18px;padding-left:14px}
+ .reading-status span{font-size:15px}.reading-status small{font-size:12px}
+}
+
