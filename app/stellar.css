@@ -74,9 +74,10 @@ header{height:52px;background:#fbfbfdd9;backdrop-filter:saturate(180%) blur(20px
 
 /* Keep the iPhone status-bar inset outside the header content box. */
 @media(max-width:760px){
- body{padding-top:max(env(safe-area-inset-top),76px);background:#fbfbfd}
- header{height:52px;padding:0 16px;top:max(env(safe-area-inset-top),76px);background:#fbfbfdf2}
- nav{background:#fbfbfdf2}
+ body{padding-top:max(env(safe-area-inset-top),76px);padding-bottom:calc(68px + env(safe-area-inset-bottom));background:#fbfbfd}
+ header{height:52px;padding:0 16px;top:max(env(safe-area-inset-top),76px);background:#fbfbfd;border-bottom:0;backdrop-filter:none}
+ nav{height:calc(68px + env(safe-area-inset-bottom));padding:4px 3px env(safe-area-inset-bottom);background:#fbfbfd;border-top:0;backdrop-filter:none}
+ nav button{min-height:52px}
 }
 
 /* Selected-text narration */
