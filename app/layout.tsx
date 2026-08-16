@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Stellar Daily · 每天看懂 AI 与世界",
+  title: "Stellar AI · 每天看懂 AI 与世界",
   description: "AI、具身智能、科技与全球新闻的个人每日情报中心。",
   icons: {
     icon: "/icon-192.png",
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     apple: "/apple-touch-icon.png",
   },
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "Stellar", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "Stellar AI", statusBarStyle: "default" },
 };
 
 export default function RootLayout({
