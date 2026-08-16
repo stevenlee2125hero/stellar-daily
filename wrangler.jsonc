@@ -4,5 +4,6 @@
   "account_id": "6f171242e79ab47c97d8da184f5e0d25",
   "compatibility_date": "2026-08-16",
   "compatibility_flags": ["nodejs_compat"],
-  "cache": { "enabled": true }
+  "cache": { "enabled": true },
+  "triggers": { "crons": ["0 18 * * *"] }
 }
