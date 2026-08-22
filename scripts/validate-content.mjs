@@ -16,6 +16,7 @@ for (const date of dates) {
   for (const story of stories) {
     for (const field of ["id", "section", "title", "summary", "source", "url"]) if (!story[field]) throw new Error(`${date}: story missing ${field}`);
     if (story.stale || /数据源重试中|自动重试|暂未取得足够/i.test(`${story.kicker} ${story.title} ${story.summary} ${story.full || ""}`)) throw new Error(`${date}: ${story.id} contains fallback/error content`);
+    if (/这项更新涉及|核心信息：公开报道呈现|为什么值得关注：这类进展|核验建议：优先检查/i.test(`${story.summary} ${story.full || ""}`)) throw new Error(`${date}: ${story.id} contains generic filler content`);
     if (!story.url.startsWith("https://") || story.url.includes("github.com/stevenlee2125hero/stellar-daily")) throw new Error(`${date}: ${story.id} does not link to a real source`);
     if ("image" in story) throw new Error(`${date}: ${story.id} still contains an image`);
     if (/&(?:amp;)?nbsp;|&lt;|&gt;|<\/?[a-z]|https?:\/\//i.test(`${story.summary} ${story.full || ""}`)) throw new Error(`${date}: ${story.id} contains markup or a raw URL in its body`);
