@@ -3,8 +3,8 @@ name: Update content and publish
 on:
   workflow_dispatch:
   schedule:
-    # 20:00 Asia/Shanghai. The updater repairs missing archive dates automatically.
-    - cron: "0 12 * * *"
+    # 02:00 Asia/Shanghai (18:00 UTC on the previous calendar day).
+    - cron: "0 18 * * *"
 
 permissions:
   contents: write
