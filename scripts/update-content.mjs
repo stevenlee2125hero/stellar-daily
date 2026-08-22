@@ -21,7 +21,7 @@ function beijingDate() { return new Intl.DateTimeFormat("en-CA", { timeZone: "As
 function analysis(section, sourceName) {
   const topic = section === "AI" ? "模型能力、智能体应用与产业采用" : section === "具身智能" ? "机器人感知、决策、控制与真实环境落地" : section === "科技" ? "技术产品、基础设施与产业竞争" : section === "前沿科学" ? "研究方法、实验结果及其可复现性" : "事件背景、各方立场及其潜在影响";
   const summary = `这项更新涉及${topic}。报道来自${sourceName}，需结合原始材料判断进展的成熟度与实际影响。`;
-  return { summary, full: `${summary}\n\n核心信息：公开报道呈现了该领域的新动向，判断价值时应区分已经发生的事实、相关方的判断，以及仍待验证的预期。\n\n为什么值得关注：这类进展可能影响后续的产品路线、研究投入、行业竞争或公共决策。\n\n核验建议：优先检查原始来源中的时间、数据、研究方法和适用范围，并持续关注独立验证与后续更新。` };
+  return { summary, full: `核心信息：公开报道呈现了该领域的新动向，判断价值时应区分已经发生的事实、相关方的判断，以及仍待验证的预期。\n\n为什么值得关注：这类进展可能影响后续的产品路线、研究投入、行业竞争或公共决策。\n\n核验建议：优先检查原始来源中的时间、数据、研究方法和适用范围，并持续关注独立验证与后续更新。` };
 }
 
 async function fetchSection(section, query, minimum, archiveDate) {

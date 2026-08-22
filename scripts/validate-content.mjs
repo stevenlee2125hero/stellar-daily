@@ -21,6 +21,7 @@ for (const date of dates) {
     if (/&(?:amp;)?nbsp;|&lt;|&gt;|<\/?[a-z]|https?:\/\//i.test(`${story.summary} ${story.full || ""}`)) throw new Error(`${date}: ${story.id} contains markup or a raw URL in its body`);
     const titleWithoutSource = story.title.endsWith(` - ${story.source}`) ? story.title.slice(0, -(` - ${story.source}`).length) : story.title;
     if (titleWithoutSource.length > 20 && story.summary.includes(titleWithoutSource)) throw new Error(`${date}: ${story.id} repeats its title in the summary`);
+    if (story.full?.trim().startsWith(story.summary.trim())) throw new Error(`${date}: ${story.id} repeats its summary at the start of the full text`);
     if (ids.has(story.id)) throw new Error(`${date}: duplicate id ${story.id}`);
     ids.add(story.id);
   }
