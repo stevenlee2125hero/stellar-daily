@@ -122,7 +122,14 @@ function concise(text, target = 300, maximum = 360) {
   const sentences = normalized.split(/(?<=[。！？!?])\s*|(?<=\.)\s*(?=[A-Z“"'])/).filter(Boolean);
   let summary = "";
   for (const sentence of sentences) {
-    if (summary.length >= 220 && summary.length + sentence.length > maximum) break;
+    if (summary.length + sentence.length > maximum) {
+      if (summary.length >= 220) break;
+      const room = maximum - summary.length - 1, candidate = sentence.slice(0, room);
+      const boundaries = [candidate.lastIndexOf("，"), candidate.lastIndexOf("；"), candidate.lastIndexOf(","), candidate.lastIndexOf(";"), candidate.lastIndexOf(" ")];
+      const boundary = Math.max(...boundaries.filter(index => index >= Math.min(220 - summary.length, target - summary.length)));
+      summary += `${candidate.slice(0, boundary > 0 ? boundary : room).replace(/[，,；;：:\s]+$/, "")}。`;
+      break;
+    }
     summary += sentence;
     if (summary.length >= target) break;
   }
