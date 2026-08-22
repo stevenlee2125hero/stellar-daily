@@ -15,6 +15,7 @@ for (const date of dates) {
   const ids = new Set();
   for (const story of stories) {
     for (const field of ["id", "section", "title", "summary", "source", "url"]) if (!story[field]) throw new Error(`${date}: story missing ${field}`);
+    if (!/[\u4e00-\u9fff]/.test(story.title) || !/[\u4e00-\u9fff]/.test(story.summary)) throw new Error(`${date}: ${story.id} is not translated into Chinese`);
     if (story.stale || /数据源重试中|自动重试|暂未取得足够/i.test(`${story.kicker} ${story.title} ${story.summary} ${story.full || ""}`)) throw new Error(`${date}: ${story.id} contains fallback/error content`);
     if (/这项更新涉及|核心信息：公开报道呈现|为什么值得关注：这类进展|核验建议：优先检查/i.test(`${story.summary} ${story.full || ""}`)) throw new Error(`${date}: ${story.id} contains generic filler content`);
     if (!story.url.startsWith("https://") || story.url.includes("github.com/stevenlee2125hero/stellar-daily")) throw new Error(`${date}: ${story.id} does not link to a real source`);
@@ -33,4 +34,9 @@ for (const date of dates) {
 }
 const latest = dates.at(-1);
 if (JSON.stringify(data.today) !== JSON.stringify(data.archives[latest])) throw new Error("today does not match latest archive");
+for (const date of dates) {
+  const knowledge = data.knowledgeArchives?.[date];
+  if (!knowledge?.title || !knowledge?.summary || !knowledge?.full || !knowledge?.url) throw new Error(`${date}: incomplete core knowledge lesson`);
+  for (const heading of ["核心原理与关键流程", "解决什么问题、为什么重要", "适用与不适用场景", "具体产品案例", "与相近技术的关系", "产品经理需要掌握", "推荐原始论文与技术报告"]) if (!knowledge.full.includes(heading)) throw new Error(`${date}: core knowledge lesson missing ${heading}`);
+}
 console.log(`Content valid: ${dates.length} continuous days (${dates[0]}..${latest}), ${data.today.length} current stories`);
