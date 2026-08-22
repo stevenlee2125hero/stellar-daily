@@ -11,7 +11,7 @@ const sections = [
 ];
 const fallback = Object.fromEntries(sections.map(([section]) => [section, { title: `${section}每日内容自动重试中`, source: "Stellar AI", url: "https://github.com/stevenlee2125hero/stellar-daily" }]));
 
-function clean(value = "") { return value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&nbsp;|&#160;/gi, " ").replace(/&quot;|&#34;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&amp;/gi, "&").replace(/<[^>]+>/g, " ").replace(/https?:\/\/\S+/gi, " ").replace(/\s+/g, " ").trim(); }
+function clean(value = "") { let decoded = value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1"); for (let pass = 0; pass < 3; pass++) decoded = decoded.replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&nbsp;|&#160;/gi, " ").replace(/&quot;|&#34;/gi, '"').replace(/&#39;|&apos;/gi, "'"); return decoded.replace(/<[^>]+>/g, " ").replace(/https?:\/\/\S+/gi, " ").replace(/\s+/g, " ").trim(); }
 function tag(item, name) { return clean(item.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)</${name}>`, "i"))?.[1] || ""); }
 function source(item) { return clean(item.match(/<source[^>]*>([\s\S]*?)<\/source>/i)?.[1] || "公开来源"); }
 function shiftDate(date, days) { const value = new Date(`${date}T00:00:00Z`); value.setUTCDate(value.getUTCDate() + days); return value.toISOString().slice(0, 10); }
@@ -28,9 +28,9 @@ async function fetchSection(section, query, minimum, archiveDate, previousStorie
     const items = [...body.matchAll(/<item>([\s\S]*?)<\/item>/gi)].slice(0, section === "AI" ? 5 : 8);
     const stories = items.map((match, index) => {
       const item = match[1], originalUrl = tag(item, "link") || fallback[section].url;
-      const title = tag(item, "title") || fallback[section].title, src = source(item);
-      const rawSummary = tag(item, "description");
-      const summary = rawSummary && !rawSummary.includes(title) ? rawSummary : `来自${src}的报道关注“${title}”，本文已整理核心信息并保留原始来源供核验。`;
+      const rawTitle = tag(item, "title") || fallback[section].title, src = source(item);
+      const title = rawTitle.endsWith(` - ${src}`) ? rawTitle.slice(0, -(` - ${src}`).length) : rawTitle;
+      const summary = `该报道聚焦${section}领域的最新进展，正文梳理其背景、重要性与后续关注点。`;
       return { id: storyId(archiveDate, section, originalUrl, index), section, kicker: `${src} · ${sourceDate}`, title, summary, full: `${summary}\n\n背景：这项内容放在全球行业与研究趋势中观察，重点关注事实、方法、数据和限制。\n\n为什么重要：它可能影响产品路线、研究方向、产业投入或公共政策。\n\n值得继续关注：请以原始来源、后续数据和独立验证为准。`, source: src, url: originalUrl, time: "8 分钟" };
     }).filter(story => story.url);
     if (stories.length >= minimum) return { stories, fallback: false };
