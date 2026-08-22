@@ -117,7 +117,7 @@ async function sourceDetail(url, fallback) {
   return articleCache.get(url);
 }
 function concise(text, target = 300, maximum = 360) {
-  const normalized = text.replace(/\s+/g, " ").trim();
+  const normalized = text.replace(/…+/g, "。").replace(/\.{3,}/g, ".").replace(/\s+/g, " ").trim();
   if (normalized.length <= maximum) return normalized;
   const sentences = normalized.split(/(?<=[。！？!?])\s*|(?<=\.)\s*(?=[A-Z“"'])/).filter(Boolean);
   let summary = "";
