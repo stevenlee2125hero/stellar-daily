@@ -94,7 +94,7 @@ async function sourceDetail(url, fallback) {
         if (pageDetail.length > detail.length) detail = pageDetail;
       }
     } catch { /* Try the reader endpoint below. */ }
-    if (detail.length < 500) {
+    if (detail.length < 1000) {
       const source = new URL(url), readerUrl = `https://r.jina.ai/http://${source.host}${source.pathname}${source.search}`;
       let readerText = "";
       try {
@@ -167,7 +167,7 @@ async function fetchSection(section, feedUrls, minimum, archiveDate) {
   const translatedStories = [];
   for (const story of unique.slice(0, minimum)) {
     const sourceText = await sourceDetail(story.url, story.rawSummary);
-    const detail = sourceText.replaceAll(story.rawTitle, " ").replace(/\b[A-Z][A-Za-z.'’-]+(?:\s+[A-Z][A-Za-z.'’-]+){1,3}\s+\d{1,2}:\d{2}\s+[AP]M\s+[A-Z]{3}\s+·\s+[A-Z][a-z]+\s+\d{1,2},\s+\d{4}/g, " ").replace(/\s+/g, " ").trim();
+    const detail = sourceText.replaceAll(story.rawTitle, " ").replace(/\b[A-Z][A-Za-z.'’-]+(?:\s+[A-Z][A-Za-z.'’-]+){1,3}\s+\d{1,2}:\d{2}\s+[AP]M\s+[A-Z]{3}\s+·\s+[A-Z][a-z]+\s+\d{1,2},\s+\d{4}/g, " ").replace(/\s+/g, " ").trim().slice(0, 1800);
     const title = await translate(story.rawTitle), translated = await translate(detail);
     translatedStories.push({ id: story.id, section: story.section, kicker: story.kicker, title, summary: concise(translated), source: story.source, url: story.url, time: story.time });
   }
