@@ -1,5 +1,9 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
 
 const RETENTION_DAYS = 30;
 const sections = [
@@ -21,16 +25,112 @@ function beijingDate() { return new Intl.DateTimeFormat("en-CA", { timeZone: "As
 function sourceFromUrl(value) { try { return new URL(value).hostname.replace(/^www\./, ""); } catch { return ""; } }
 function publishedDate(item, fallbackDate) { const value = rawTag(item, "pubDate"), parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? fallbackDate : parsed.toISOString().slice(0, 10); }
 const translationCache = new Map();
+const articleCache = new Map();
+let primaryTranslationAvailable = true;
+async function fetchWithRetry(url, options, attempts = 3, timeout = 20000) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const response = await fetch(url, { ...options, signal: AbortSignal.timeout(timeout) });
+      if (response.ok || response.status < 500) return response;
+      lastError = new Error(`HTTP ${response.status}`);
+    } catch (error) { lastError = error; }
+    if (attempt < attempts) await new Promise(resolve => setTimeout(resolve, attempt * 750));
+  }
+  throw lastError;
+}
+async function fallbackTranslate(text) {
+  const chunks = text.match(/[\s\S]{1,700}/g) || [];
+  const translated = [];
+  for (const chunk of chunks) {
+    try {
+      const url = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=auto&tl=zh-CN&q=${encodeURIComponent(chunk)}`;
+      const response = await fetchWithRetry(url, {}, 2, 10000);
+      if (!response.ok) throw new Error(`fallback translation returned ${response.status}`);
+      const data = await response.json();
+      translated.push(Array.isArray(data) ? data.join("") : data.translatedText);
+    } catch {
+      if (process.platform === "win32") {
+        const url = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=auto&tl=zh-CN&q=${encodeURIComponent(chunk)}`;
+        const { stdout } = await execFileAsync("powershell", ["-NoProfile", "-Command", `(Invoke-RestMethod '${url.replaceAll("'", "''")}') -join ''`], { timeout: 30000, windowsHide: true });
+        translated.push(stdout.trim());
+        continue;
+      }
+      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(chunk.slice(0, 420))}&langpair=en|zh-CN`;
+      const response = await fetchWithRetry(url, {}, 2);
+      if (!response.ok) throw new Error(`secondary translation returned ${response.status}`);
+      const data = await response.json();
+      if (!data.responseData?.translatedText) throw new Error("secondary translation returned no text");
+      translated.push(data.responseData.translatedText);
+    }
+  }
+  return translated.join("").replace(/\s+/g, " ").trim();
+}
 async function translate(text) {
+  if (process.env.SKIP_TRANSLATION === "1") return text;
   if (!text || /[\u4e00-\u9fff]/.test(text)) return text;
   if (!translationCache.has(text)) translationCache.set(text, (async () => {
     const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=zh-CN&dt=t&q=${encodeURIComponent(text)}`;
-    const response = await fetch(url, { signal: AbortSignal.timeout(20000) });
-    if (!response.ok) throw new Error(`translation returned ${response.status}`);
-    const data = await response.json();
-    return data[0].map(part => part[0]).join("").replace(/\s+/g, " ").trim();
+    try {
+      if (!primaryTranslationAvailable) return fallbackTranslate(text);
+      const response = await fetchWithRetry(url, {}, 2, 8000);
+      if (!response.ok) throw new Error(`translation returned ${response.status}`);
+      const data = await response.json();
+      return data[0].map(part => part[0]).join("").replace(/\s+/g, " ").trim();
+    } catch { primaryTranslationAvailable = false; return fallbackTranslate(text); }
   })());
   return translationCache.get(text);
+}
+async function sourceDetail(url, fallback) {
+  if (!articleCache.has(url)) articleCache.set(url, (async () => {
+    let detail = fallback;
+    try {
+      const response = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 StellarAI-Reader/1.0" }, signal: AbortSignal.timeout(12000) });
+      if (response.ok) {
+        const html = await response.text(), candidates = [];
+        for (const pattern of [/<meta[^>]+(?:property|name)=["'](?:og:description|twitter:description|description)["'][^>]+content=["']([^"']+)["']/gi, /<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["'](?:og:description|twitter:description|description)["']/gi]) for (const match of html.matchAll(pattern)) candidates.push(clean(match[1]));
+        for (const match of html.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)) { const paragraph = clean(match[1]); if (paragraph.length >= 70 && !/cookie|subscribe|sign up|copyright|newsletter/i.test(paragraph)) candidates.push(paragraph); if (candidates.join(" ").length > 700) break; }
+        const pageDetail = candidates.filter((value, index, all) => value && all.indexOf(value) === index).join(" ");
+        if (pageDetail.length > detail.length) detail = pageDetail;
+      }
+    } catch { /* Try the reader endpoint below. */ }
+    if (detail.length < 500) {
+      const source = new URL(url), readerUrl = `https://r.jina.ai/http://${source.host}${source.pathname}${source.search}`;
+      let readerText = "";
+      try {
+        const readerResponse = await fetch(readerUrl, { headers: { "User-Agent": "StellarAI-Reader/1.0" }, signal: AbortSignal.timeout(20000) });
+        if (readerResponse.ok) readerText = await readerResponse.text();
+      } catch { /* Use the Windows network stack locally. */ }
+      if (!readerText && process.platform === "win32") try {
+        const { stdout } = await execFileAsync("powershell", ["-NoProfile", "-Command", `(Invoke-WebRequest '${readerUrl.replaceAll("'", "''")}' -UseBasicParsing).Content`], { timeout: 30000, windowsHide: true, maxBuffer: 2_000_000 });
+        readerText = stdout;
+      } catch (error) { console.warn(`Reader fallback skipped ${url}: ${error.message}`); }
+      if (readerText) {
+        let markdown = readerText.split("Markdown Content:").at(-1) || "";
+        if (markdown.includes("Summary:")) markdown = markdown.split("Summary:").at(-1) || markdown;
+        const readerDetail = clean(markdown.replace(/!\[[^\]]*\]\([^)]+\)/g, " ").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/^#{1,6}\s+/gm, ""));
+        if (readerDetail.length > detail.length) detail = readerDetail;
+      }
+    }
+    return detail;
+  })());
+  return articleCache.get(url);
+}
+function concise(text, target = 300, maximum = 360) {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maximum) return normalized;
+  const sentences = normalized.split(/(?<=[。！？!?])\s*|(?<=\.)\s*(?=[A-Z“"'])/).filter(Boolean);
+  let summary = "";
+  for (const sentence of sentences) {
+    if (summary.length >= 220 && summary.length + sentence.length > maximum) break;
+    summary += sentence;
+    if (summary.length >= target) break;
+  }
+  if (summary.length < 220) {
+    const boundary = Math.max(normalized.lastIndexOf("。", maximum), normalized.lastIndexOf("！", maximum), normalized.lastIndexOf("？", maximum), normalized.lastIndexOf(".", maximum), normalized.lastIndexOf("!", maximum), normalized.lastIndexOf("?", maximum));
+    if (boundary >= 220) summary = normalized.slice(0, boundary + 1);
+  }
+  return summary.trim();
 }
 
 const knowledgeCurriculum = [
@@ -40,9 +140,13 @@ const knowledgeCurriculum = [
   { title: "Agent：让模型围绕目标持续行动", what: "Agent 是能观察环境、制定步骤、调用工具、检查结果并继续行动的大模型系统。", principle: "典型循环是观察、推理、行动、获得反馈、更新计划，直到完成目标或触发停止条件。", solves: "它适合跨多个系统和步骤的开放任务，但会放大模型错误、权限和成本风险。", suited: "适合研究、编码、数据分析和工作流自动化；不适合不可逆高风险操作或可由确定流程直接完成的任务。", example: "旅行助手比较航班、检查日历、生成方案并等待用户确认后再预订，其中确认边界是关键产品设计。", relation: "Harness 提供运行框架，MCP 连接工具，RAG 提供资料，模型负责决策，评测系统判断整个任务是否成功。", pm: "重点看任务成功率、步骤数、失败恢复率、人工确认点、权限最小化和预算上限。常见坑是给 Agent 过宽权限或没有明确停止条件。", papers: "推荐阅读：ReAct（https://arxiv.org/abs/2210.03629），理解推理与行动；Reflexion（https://arxiv.org/abs/2303.11366），理解反馈式改进；Voyager（https://arxiv.org/abs/2305.16291），理解长期技能积累。" },
   { title: "MCP：用统一协议连接模型与工具", what: "MCP 是让 AI 应用以统一方式发现并调用数据、资源和工具的开放协议。", principle: "Host 管理用户体验与权限，Client 与具体 Server 建立连接，Server 暴露工具、资源和提示模板，双方通过标准消息交换能力与结果。", solves: "它减少每个 AI 产品为不同系统重复开发专用连接器的成本，并让权限边界更清晰。", suited: "适合连接数据库、文档、开发工具和企业系统；不适合把所有内部接口无差别暴露给模型。", example: "开发助手通过不同 MCP Server 读取设计稿、查询工单和运行测试，而应用统一管理授权与审计。", relation: "MCP 解决连接标准，Agent 决定何时调用，Harness 管理调用流程，API 则仍是 Server 背后的具体实现方式。", pm: "重点掌握工具描述质量、最小权限、确认机制、幂等性、超时、错误回传和审计。常见坑是工具命名含糊或把敏感写操作设计成默认自动执行。", papers: "推荐阅读：MCP 规范（https://modelcontextprotocol.io/specification），理解协议本身；MCP GitHub（https://github.com/modelcontextprotocol），查看 SDK 与参考实现；Anthropic MCP 介绍（https://www.anthropic.com/news/model-context-protocol），理解其设计动机。" },
 ];
-function knowledgeForDate(date) {
-  const index = Math.abs(Math.floor(new Date(`${date}T00:00:00Z`).getTime() / 86400000)) % knowledgeCurriculum.length, item = knowledgeCurriculum[index];
-  return { id: `knowledge-${date}`, section: "大模型知识", kicker: `基础到进阶 · ${date}`, title: item.title, summary: item.what, full: `核心原理与关键流程\n${item.principle}\n\n解决什么问题、为什么重要\n${item.solves}\n\n适用与不适用场景\n${item.suited}\n\n具体产品案例\n${item.example}\n\n与相近技术的关系\n${item.relation}\n\n产品经理需要掌握\n${item.pm}\n\n推荐原始论文与技术报告\n${item.papers}`, source: "原始论文与官方技术资料", url: item.papers.match(/https:\/\/[^）]+/)?.[0] || "https://arxiv.org/", time: "8 分钟" };
+function knowledgeForDate(date, stories) {
+  const signals = [/harness|工作流|编排|工具调用|agent|智能体/i, /rag|检索|知识库|向量/i, /transformer|注意力|上下文/i, /agent|智能体|自主|执行任务/i, /mcp|模型上下文协议|连接器/i];
+  const corpus = stories.filter(story => story.section === "AI").map(story => `${story.title} ${story.summary}`).join(" "), ranked = knowledgeCurriculum.map((item, index) => ({ item, score: (corpus.match(new RegExp(signals[index].source, "gi")) || []).length })).sort((a, b) => b.score - a.score);
+  const selected = ranked[0], item = selected.item, related = stories.filter(story => story.section === "AI" && signals[knowledgeCurriculum.indexOf(item)].test(`${story.title} ${story.summary}`)).slice(0, 2).map(story => `《${story.title}》`).join("、") || "当天模型、工具调用与产品落地动态";
+  const full = `今日为什么值得学\n今天的公开信息中，${related}都指向同一个趋势：模型竞争正在从单次回答能力，转向更完整、更可靠的系统能力。因此今天选择“${item.title.split("：")[0]}”作为重点。\n\n一句话说明\n${item.what}\n\n核心原理与关键流程\n${item.principle}\n实际产品通常还要加入输入检查、上下文管理、失败回退、结果验证和全链路日志，任何一个环节缺失，都可能让演示效果无法稳定复现。\n\n解决什么问题、为什么重要\n${item.solves}\n评价它时不能只看单次生成质量，而要看完整任务是否成功、证据是否可追溯，以及失败后是否能够安全恢复。\n\n适用与不适用场景\n${item.suited}\n产品设计应先判断任务是否需要概率推理，再决定是否引入模型，避免把确定性流程复杂化。\n\n具体产品案例\n${item.example}\n案例中的价值来自完整流程，而不只是某一次模型回答。\n\n与相近技术的区别和组合关系\n${item.relation}\n这些技术通常组合使用，但各自解决的问题不同，不能用一个概念替代整套系统。\n\n产品经理需要掌握的设计要点、指标与常见坑\n${item.pm}\n上线前应建立真实任务集，覆盖正常路径、边界条件、工具失败、权限不足和需要人工确认的情况。\n\n推荐原始论文与技术报告\n${item.papers}`;
+  const formattedFull = full.replace(/^(今日为什么值得学|一句话说明|核心原理与关键流程|解决什么问题、为什么重要|适用与不适用场景|具体产品案例|与相近技术的区别和组合关系|产品经理需要掌握的设计要点、指标与常见坑|推荐原始论文与技术报告)$/gm, "▍ $1");
+  return { id: `knowledge-${date}`, section: "大模型知识", kicker: `热点筛选 · ${date}`, title: item.title, summary: `${item.what} 本期结合当天最值得关注的公开动态，讲清原理、适用边界、产品案例和落地指标。`, full: formattedFull, source: "原始论文与官方技术资料", url: item.papers.match(/https:\/\/[^）]+/)?.[0] || "https://arxiv.org/", time: "12 分钟" };
 }
 
 async function fetchSection(section, feedUrls, minimum, archiveDate) {
@@ -53,14 +157,21 @@ async function fetchSection(section, feedUrls, minimum, archiveDate) {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const body = await response.text(), items = [...body.matchAll(/<item[^>]*>([\s\S]*?)<\/item>/gi)].slice(0, 15);
       for (const [index, match] of items.entries()) {
-        const item = match[1], originalUrl = rawTag(item, "link").replace(/&amp;/g, "&").replace(/^http:/, "https:"), sourceName = sourceFromUrl(originalUrl), rawTitle = tag(item, "title"), rawSummary = tag(item, "description"), date = publishedDate(item, sourceDate);
-        if (originalUrl.startsWith("https://") && rawTitle.length > 12 && rawSummary.length > 45 && sourceName && !/^Read\b/i.test(rawSummary)) { const [title, summary] = await Promise.all([translate(rawTitle), translate(rawSummary)]); stories.push({ id: storyId(archiveDate, section, originalUrl, index), section, kicker: `${sourceName} · ${date}`, title, summary, source: sourceName, url: originalUrl, time: "3 分钟" }); }
+        const item = match[1], originalUrl = rawTag(item, "link").replace(/&amp;/g, "&").replace(/^http:/, "https:"), sourceName = sourceFromUrl(originalUrl), rawTitle = tag(item, "title"), description = tag(item, "description"), articleBody = tag(item, "content:encoded"), rawSummary = articleBody.length > description.length ? articleBody : description, date = publishedDate(item, sourceDate);
+        if (originalUrl.startsWith("https://") && rawTitle.length > 12 && rawSummary.length > 45 && sourceName && !/^Read\b/i.test(rawSummary)) stories.push({ id: storyId(archiveDate, section, originalUrl, index), section, kicker: `${sourceName} · ${date}`, rawTitle, rawSummary, source: sourceName, url: originalUrl, time: "3 分钟" });
       }
     } catch (error) { console.warn(`RSS ${section} ${feedUrl} skipped: ${error.message}`); }
   }
   const unique = stories.filter((story, index, all) => all.findIndex(candidate => candidate.url === story.url) === index);
   if (unique.length < minimum) throw new Error(`refresh ${archiveDate} ${section} failed: only ${unique.length}/${minimum} real stories`);
-  return unique.slice(0, minimum);
+  const translatedStories = [];
+  for (const story of unique.slice(0, minimum)) {
+    const sourceText = await sourceDetail(story.url, story.rawSummary);
+    const detail = sourceText.replaceAll(story.rawTitle, " ").replace(/\b[A-Z][A-Za-z.'’-]+(?:\s+[A-Z][A-Za-z.'’-]+){1,3}\s+\d{1,2}:\d{2}\s+[AP]M\s+[A-Z]{3}\s+·\s+[A-Z][a-z]+\s+\d{1,2},\s+\d{4}/g, " ").replace(/\s+/g, " ").trim();
+    const title = await translate(story.rawTitle), translated = await translate(detail);
+    translatedStories.push({ id: story.id, section: story.section, kicker: story.kicker, title, summary: concise(translated), source: story.source, url: story.url, time: story.time });
+  }
+  return translatedStories;
 }
 
 async function refreshDay(date) { return (await Promise.all(sections.map(([section, feedUrls, minimum]) => fetchSection(section, feedUrls, minimum, date)))).flat(); }
@@ -77,7 +188,7 @@ const archives = { ...(previous.archives || {}) }, knowledgeArchives = { ...(pre
 for (const date of dates) {
   if (date < minimumStart && Array.isArray(archives[date]) && archives[date].length) continue;
   const stories = await refreshDay(date);
-  archives[date] = stories; knowledgeArchives[date] = knowledgeForDate(date);
+  archives[date] = stories; knowledgeArchives[date] = knowledgeForDate(date, stories);
   refreshResults.push({ date, sections: sections.length, stories: stories.length });
 }
 for (const key of Object.keys(archives)) if (!dates.includes(key)) delete archives[key];
