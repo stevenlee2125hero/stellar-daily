@@ -5,6 +5,7 @@ const data = JSON.parse(await readFile(file, "utf8"));
 const required = { AI: 5, 具身智能: 6, 科技: 6, 前沿科学: 6, 新闻: 6 };
 const dates = Object.keys(data.archives || {}).sort();
 if (!dates.length) throw new Error("No archive data");
+if (dates.length < 2) throw new Error(`Archive needs at least 2 days, found ${dates.length}`);
 for (let index = 1; index < dates.length; index++) {
   const expected = new Date(`${dates[index - 1]}T00:00:00Z`); expected.setUTCDate(expected.getUTCDate() + 1);
   if (dates[index] !== expected.toISOString().slice(0, 10)) throw new Error(`Archive gap: ${dates[index - 1]} -> ${dates[index]}`);
@@ -14,6 +15,8 @@ for (const date of dates) {
   const ids = new Set();
   for (const story of stories) {
     for (const field of ["id", "section", "title", "summary", "source", "url"]) if (!story[field]) throw new Error(`${date}: story missing ${field}`);
+    if (story.stale || /数据源重试中|自动重试|暂未取得足够/i.test(`${story.kicker} ${story.title} ${story.summary} ${story.full || ""}`)) throw new Error(`${date}: ${story.id} contains fallback/error content`);
+    if (!story.url.startsWith("https://") || story.url.includes("github.com/stevenlee2125hero/stellar-daily")) throw new Error(`${date}: ${story.id} does not link to a real source`);
     if ("image" in story) throw new Error(`${date}: ${story.id} still contains an image`);
     if (/&(?:amp;)?nbsp;|&lt;|&gt;|<\/?[a-z]|https?:\/\//i.test(`${story.summary} ${story.full || ""}`)) throw new Error(`${date}: ${story.id} contains markup or a raw URL in its body`);
     const titleWithoutSource = story.title.endsWith(` - ${story.source}`) ? story.title.slice(0, -(` - ${story.source}`).length) : story.title;
