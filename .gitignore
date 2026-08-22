@@ -44,3 +44,6 @@ tsconfig.tsbuildinfo
 /.wrangler/
 /outputs/
 /work/
+/.audio-deps/
+/public/audio/
+__pycache__/
