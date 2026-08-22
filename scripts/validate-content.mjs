@@ -14,6 +14,8 @@ for (const date of dates) {
   const ids = new Set();
   for (const story of stories) {
     for (const field of ["id", "section", "title", "summary", "source", "url"]) if (!story[field]) throw new Error(`${date}: story missing ${field}`);
+    if ("image" in story) throw new Error(`${date}: ${story.id} still contains an image`);
+    if (/&lt;|&gt;|<\/?[a-z]|https?:\/\//i.test(`${story.summary} ${story.full || ""}`)) throw new Error(`${date}: ${story.id} contains markup or a raw URL in its body`);
     if (ids.has(story.id)) throw new Error(`${date}: duplicate id ${story.id}`);
     ids.add(story.id);
   }
