@@ -7,7 +7,7 @@ const execFileAsync = promisify(execFile);
 
 const RETENTION_DAYS = 30;
 const sections = [
-  ["AI", ["https://techcrunch.com/category/artificial-intelligence/feed/"], 5],
+  ["AI", ["https://techcrunch.com/category/artificial-intelligence/feed/", "https://venturebeat.com/category/ai/feed/", "https://www.technologyreview.com/topic/artificial-intelligence/feed", "https://www.marktechpost.com/feed/", "https://the-decoder.com/feed/", "https://www.artificialintelligence-news.com/feed/rss/"], 5],
   ["具身智能", ["https://rss.arxiv.org/rss/cs.RO", "https://techxplore.com/rss-feed/robotics-news/", "https://spectrum.ieee.org/feeds/topic/robotics.rss"], 6],
   ["科技", ["https://techcrunch.com/feed/", "https://feeds.arstechnica.com/arstechnica/index"], 6],
   ["前沿科学", ["https://www.sciencedaily.com/rss/top/science.xml"], 6],
@@ -156,7 +156,7 @@ function knowledgeForDate(date, stories) {
   return { id: `knowledge-${date}`, section: "大模型知识", kicker: `热点筛选 · ${date}`, title: item.title, summary: `${item.what} 本期结合当天最值得关注的公开动态，讲清原理、适用边界、产品案例和落地指标。`, full: formattedFull, source: "原始论文与官方技术资料", url: item.papers.match(/https:\/\/[^）]+/)?.[0] || "https://arxiv.org/", time: "12 分钟" };
 }
 
-async function fetchSection(section, feedUrls, minimum, archiveDate, blockedUrls = new Set()) {
+async function fetchSection(section, feedUrls, minimum, archiveDate, blockedUrls = new Set(), blockedTitles = new Set()) {
   const sourceDate = shiftDate(archiveDate, -1), stories = [];
   for (const feedUrl of feedUrls) {
     try {
@@ -178,6 +178,7 @@ async function fetchSection(section, feedUrls, minimum, archiveDate, blockedUrls
     const boilerplate = /skip to content|desktop logo|mobile logo|toggle mega menu|submit site search|跳转到内容|桌面徽标|移动徽标|切换大型菜单|提交站点搜索|fetch-start|34\|\|h|latest\s*\*\s*u\.s\.|最新\s*\*\s*美国|CBS News 24\/7|CBS 新闻24\/7|FacebookTwitterPinterest/i;
     const detail = (boilerplate.test(cleanedSource) ? story.rawSummary : cleanedSource).slice(0, 1800);
     const title = await translate(story.rawTitle), translated = await translate(detail);
+    if (blockedTitles.has(title.trim().toLocaleLowerCase())) { console.warn(`RSS ${section} ${story.url} skipped: title already exists in archive`); continue; }
     const summary = concise(translated);
     if (summary.length < 220) { console.warn(`RSS ${section} ${story.url} skipped: summary only ${summary.length} characters`); continue; }
     translatedStories.push({ id: story.id, section: story.section, kicker: story.kicker, title, summary, source: story.source, url: story.url, time: story.time });
@@ -187,7 +188,7 @@ async function fetchSection(section, feedUrls, minimum, archiveDate, blockedUrls
   return translatedStories;
 }
 
-async function refreshDay(date, previousStories = []) { const blockedUrls = new Set(previousStories.map(story => story.url)), [primary, ...rest] = sections, aiStories = await fetchSection(...primary, date, blockedUrls); for (const story of aiStories) blockedUrls.add(story.url); const remaining = await Promise.all(rest.map(([section, feedUrls, minimum]) => fetchSection(section, feedUrls, minimum, date, blockedUrls))); return [...aiStories, ...remaining.flat()]; }
+async function refreshDay(date, previousStories = []) { const blockedUrls = new Set(previousStories.map(story => story.url)), blockedTitles = new Set(previousStories.map(story => story.title.trim().toLocaleLowerCase())), [primary, ...rest] = sections, aiStories = await fetchSection(...primary, date, blockedUrls, blockedTitles); for (const story of aiStories) { blockedUrls.add(story.url); blockedTitles.add(story.title.trim().toLocaleLowerCase()); } const remaining = await Promise.all(rest.map(([section, feedUrls, minimum]) => fetchSection(section, feedUrls, minimum, date, blockedUrls, blockedTitles))); return [...aiStories, ...remaining.flat()]; }
 
 const todayDate = beijingDate(), file = "public/data/content.json";
 let previous = { today: [], archives: {}, knowledge: null, knowledgeArchives: {}, metadata: {} };
@@ -200,7 +201,8 @@ const dates = Array.from({ length: dayCount }, (_, index) => shiftDate(archiveSt
 const archives = { ...(previous.archives || {}) }, knowledgeArchives = { ...(previous.knowledgeArchives || {}) }, refreshResults = [];
 for (const date of dates) {
   if (date < minimumStart && Array.isArray(archives[date]) && archives[date].length) continue;
-  const stories = await refreshDay(date, archives[shiftDate(date, -1)] || []);
+  const allPreviousStories = Object.entries(archives).filter(([archiveDate]) => archiveDate < date).flatMap(([, stories]) => stories);
+  const stories = await refreshDay(date, allPreviousStories);
   archives[date] = stories; knowledgeArchives[date] = knowledgeForDate(date, stories);
   refreshResults.push({ date, sections: sections.length, stories: stories.length });
 }

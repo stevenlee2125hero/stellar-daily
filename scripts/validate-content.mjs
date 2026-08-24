@@ -10,11 +10,16 @@ for (let index = 1; index < dates.length; index++) {
   const expected = new Date(`${dates[index - 1]}T00:00:00Z`); expected.setUTCDate(expected.getUTCDate() + 1);
   if (dates[index] !== expected.toISOString().slice(0, 10)) throw new Error(`Archive gap: ${dates[index - 1]} -> ${dates[index]}`);
   if (index === dates.length - 1) {
-    const previousUrls = new Set(data.archives[dates[index - 1]].map(story => story.url));
+    const comparisonDates = dates.slice(0, index);
+    const previousUrls = new Set(comparisonDates.flatMap(date => data.archives[date].map(story => story.url)));
+    const previousTitles = new Set(comparisonDates.flatMap(date => data.archives[date].map(story => story.title.trim().toLocaleLowerCase())));
     const repeated = data.archives[dates[index]].filter(story => previousUrls.has(story.url));
-    if (repeated.length) throw new Error(`${dates[index]} repeats ${repeated.length} source URLs from ${dates[index - 1]}`);
+    const repeatedTitles = data.archives[dates[index]].filter(story => previousTitles.has(story.title.trim().toLocaleLowerCase()));
+    if (repeated.length) throw new Error(`${dates[index]} repeats ${repeated.length} source URLs from its archive history`);
+    if (repeatedTitles.length) throw new Error(`${dates[index]} repeats ${repeatedTitles.length} titles from its archive history`);
   }
 }
+const archiveUrls = new Set(), archiveTitles = new Set();
 for (const date of dates) {
   const stories = data.archives[date];
   const ids = new Set(), urls = new Set();
@@ -34,8 +39,13 @@ for (const date of dates) {
     if (story.full?.trim().startsWith(story.summary.trim())) throw new Error(`${date}: ${story.id} repeats its summary at the start of the full text`);
     if (ids.has(story.id)) throw new Error(`${date}: duplicate id ${story.id}`);
     if (urls.has(story.url)) throw new Error(`${date}: duplicate source URL ${story.url}`);
+    const normalizedTitle = story.title.trim().toLocaleLowerCase();
+    if (archiveUrls.has(story.url)) throw new Error(`${date}: source URL already exists in an earlier archive day: ${story.url}`);
+    if (archiveTitles.has(normalizedTitle)) throw new Error(`${date}: title already exists in an earlier archive day: ${story.title}`);
     ids.add(story.id);
     urls.add(story.url);
+    archiveUrls.add(story.url);
+    archiveTitles.add(normalizedTitle);
   }
   for (const [section, minimum] of Object.entries(required)) {
     const count = stories.filter(story => story.section === section).length;
