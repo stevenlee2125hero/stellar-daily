@@ -193,7 +193,7 @@ const todayDate = beijingDate(), file = "public/data/content.json";
 let previous = { today: [], archives: {}, knowledge: null, knowledgeArchives: {}, metadata: {} };
 try { previous = JSON.parse(await readFile(file, "utf8")); } catch { /* First run starts a new archive. */ }
 const existingDates = Object.keys(previous.archives || {}).filter(date => date <= todayDate).sort();
-const retentionStart = shiftDate(todayDate, 1 - RETENTION_DAYS), minimumStart = shiftDate(todayDate, -1);
+const retentionStart = shiftDate(todayDate, 1 - RETENTION_DAYS), minimumStart = shiftDate(todayDate, -3);
 const archiveStart = existingDates.length && existingDates[0] < minimumStart ? existingDates[0] : minimumStart;
 const dayCount = Math.round((new Date(`${todayDate}T00:00:00Z`).getTime() - new Date(`${archiveStart}T00:00:00Z`).getTime()) / 86400000) + 1;
 const dates = Array.from({ length: dayCount }, (_, index) => shiftDate(archiveStart, index)).filter(date => date >= retentionStart);
