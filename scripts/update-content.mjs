@@ -16,6 +16,7 @@ const sections = [
 
 function decodeNumericEntities(value) { return value.replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(Number.parseInt(code, 16))).replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code))); }
 function clean(value = "") { let decoded = value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1"); for (let pass = 0; pass < 3; pass++) decoded = decoded.replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&nbsp;|&#160;/gi, " ").replace(/&quot;|&#34;/gi, '"').replace(/&#39;|&apos;/gi, "'"); return decodeNumericEntities(decoded).replace(/<[^>]+>/g, " ").replace(/https?:\/\/\S+/gi, " ").replace(/\s+/g, " ").trim(); }
+function stripTranslationArtifacts(value = "") { return /[\u4e00-\u9fff]/.test(value) ? value.replace(/(?:,|，)?\s*en(?=[\u4e00-\u9fff]|$|[\s，。！？；：、（）])/gi, "").replace(/(?:,|，)?\s*zh-CN(?=[\u4e00-\u9fff]|$|[\s，。！？；：、（）])/gi, "").replace(/\s+/g, " ").trim() : value; }
 function tag(item, name) { return clean(item.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)</${name}>`, "i"))?.[1] || ""); }
 function rawTag(item, name) { return (item.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)</${name}>`, "i"))?.[1] || "").replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").trim(); }
 function shiftDate(date, days) { const value = new Date(`${date}T00:00:00Z`); value.setUTCDate(value.getUTCDate() + days); return value.toISOString().slice(0, 10); }
@@ -48,7 +49,7 @@ async function fallbackTranslate(text) {
       const response = await fetchWithRetry(url, {}, 2, 10000);
       if (!response.ok) throw new Error(`fallback translation returned ${response.status}`);
       const data = await response.json();
-      translated.push(Array.isArray(data) ? (Array.isArray(data[0]) ? data[0].map(part => Array.isArray(part) ? part[0] : part).join("") : data[0]) : data.translatedText);
+      translated.push(Array.isArray(data) ? (Array.isArray(data[0]) ? data[0][0] : data[0]) : data.translatedText);
     } catch {
       if (process.platform === "win32") {
         const url = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=auto&tl=zh-CN&q=${encodeURIComponent(chunk)}`;
@@ -64,7 +65,7 @@ async function fallbackTranslate(text) {
       translated.push(data.responseData.translatedText);
     }
   }
-  return translated.join("").replace(/\s+/g, " ").replace(/(?:,|，)\s*(?:en|zh-CN)\b/gi, "").trim();
+  return stripTranslationArtifacts(translated.join("").replace(/\s+/g, " ").trim());
 }
 async function translate(text) {
   if (process.env.SKIP_TRANSLATION === "1") return text;
@@ -76,7 +77,7 @@ async function translate(text) {
       const response = await fetchWithRetry(url, {}, 2, 8000);
       if (!response.ok) throw new Error(`translation returned ${response.status}`);
       const data = await response.json();
-      return data[0].map(part => part[0]).join("").replace(/\s+/g, " ").replace(/(?:,|，)\s*(?:en|zh-CN)\b/gi, "").trim();
+      return stripTranslationArtifacts(data[0].map(part => part[0]).join("").replace(/\s+/g, " ").trim());
     } catch { primaryTranslationAvailable = false; return fallbackTranslate(text); }
   })());
   return translationCache.get(text);
@@ -117,7 +118,7 @@ async function sourceDetail(url, fallback) {
   return articleCache.get(url);
 }
 function concise(text, target = 300, maximum = 360) {
-  const normalized = text.replace(/(?:,|，)\s*(?:en|zh-CN)\b/gi, "").replace(/…+/g, "。").replace(/\.{3,}/g, ".").replace(/\s+/g, " ").trim();
+  const normalized = stripTranslationArtifacts(text).replace(/…+/g, "。").replace(/\.{3,}/g, ".").replace(/\s+/g, " ").trim();
   if (normalized.length <= maximum) return normalized;
   const sentences = normalized.split(/(?<=[。！？!?])\s*|(?<=\.)\s*(?=[A-Z“"'])/).filter(Boolean);
   let summary = "";
