@@ -11,7 +11,7 @@ const sections = [
   ["具身智能", ["https://rss.arxiv.org/rss/cs.RO", "https://techxplore.com/rss-feed/robotics-news/", "https://spectrum.ieee.org/feeds/topic/robotics.rss"], 6],
   ["科技", ["https://techcrunch.com/feed/", "https://feeds.arstechnica.com/arstechnica/index"], 6],
   ["前沿科学", ["https://www.sciencedaily.com/rss/top/science.xml", "https://phys.org/rss-feed/", "https://scitechdaily.com/feed/", "https://www.livescience.com/feeds/all"], 6],
-  ["新闻", ["https://www.france24.com/en/rss", "https://www.cbsnews.com/latest/rss/world", "https://abcnews.go.com/abcnews/internationalheadlines", "https://feeds.npr.org/1004/rss.xml"], 6],
+  ["新闻", ["https://www.france24.com/en/rss", "https://feeds.skynews.com/feeds/rss/world.xml", "https://www.cbsnews.com/latest/rss/world", "https://abcnews.go.com/abcnews/internationalheadlines", "https://feeds.npr.org/1004/rss.xml"], 6],
 ];
 
 function decodeNumericEntities(value) { return value.replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(Number.parseInt(code, 16))).replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code))); }
