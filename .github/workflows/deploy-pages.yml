@@ -3,8 +3,9 @@ name: Update content and publish
 on:
   workflow_dispatch:
   schedule:
-    # 02:00 Asia/Shanghai (18:00 UTC on the previous calendar day).
-    - cron: "0 18 * * *"
+    # Start at 01:17 Asia/Shanghai so GitHub queue delays still finish before 02:00.
+    # Avoiding the top of the hour also reduces scheduled-run congestion.
+    - cron: "17 17 * * *"
 
 permissions:
   contents: write

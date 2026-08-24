@@ -11,7 +11,7 @@ const sections = [
   ["具身智能", ["https://spectrum.ieee.org/feeds/topic/robotics.rss"], 6],
   ["科技", ["https://techcrunch.com/feed/", "https://feeds.arstechnica.com/arstechnica/index"], 6],
   ["前沿科学", ["https://www.sciencedaily.com/rss/top/science.xml"], 6],
-  ["新闻", ["https://www.theguardian.com/world/rss", "https://feeds.npr.org/1004/rss.xml", "https://www.aljazeera.com/xml/rss/all.xml"], 6],
+  ["新闻", ["https://www.france24.com/en/rss", "https://www.cbsnews.com/latest/rss/world", "https://abcnews.go.com/abcnews/internationalheadlines", "https://feeds.npr.org/1004/rss.xml"], 6],
 ];
 
 function decodeNumericEntities(value) { return value.replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(Number.parseInt(code, 16))).replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code))); }
@@ -156,20 +156,20 @@ function knowledgeForDate(date, stories) {
   return { id: `knowledge-${date}`, section: "大模型知识", kicker: `热点筛选 · ${date}`, title: item.title, summary: `${item.what} 本期结合当天最值得关注的公开动态，讲清原理、适用边界、产品案例和落地指标。`, full: formattedFull, source: "原始论文与官方技术资料", url: item.papers.match(/https:\/\/[^）]+/)?.[0] || "https://arxiv.org/", time: "12 分钟" };
 }
 
-async function fetchSection(section, feedUrls, minimum, archiveDate) {
+async function fetchSection(section, feedUrls, minimum, archiveDate, blockedUrls = new Set()) {
   const sourceDate = shiftDate(archiveDate, -1), stories = [];
   for (const feedUrl of feedUrls) {
     try {
       const response = await fetch(feedUrl, { headers: { "User-Agent": "StellarAI-RSSReader/1.0" }, signal: AbortSignal.timeout(20000) });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const body = await response.text(), items = [...body.matchAll(/<item[^>]*>([\s\S]*?)<\/item>/gi)].slice(0, 15);
+      const body = await response.text(), items = [...body.matchAll(/<item[^>]*>([\s\S]*?)<\/item>/gi)].slice(0, 50);
       for (const [index, match] of items.entries()) {
         const item = match[1], originalUrl = rawTag(item, "link").replace(/&amp;/g, "&").replace(/^http:/, "https:"), sourceName = sourceFromUrl(originalUrl), rawTitle = tag(item, "title"), description = tag(item, "description"), articleBody = tag(item, "content:encoded"), rawSummary = articleBody.length > description.length ? articleBody : description, date = publishedDate(item, sourceDate);
-        if (originalUrl.startsWith("https://") && rawTitle.length > 12 && rawSummary.length > 45 && sourceName && !/^Read\b/i.test(rawSummary)) stories.push({ id: storyId(archiveDate, section, originalUrl, index), section, kicker: `${sourceName} · ${date}`, rawTitle, rawSummary, source: sourceName, url: originalUrl, time: "3 分钟" });
+        if (originalUrl.startsWith("https://") && rawTitle.length > 12 && rawSummary.length > 45 && sourceName && !/^Read\b/i.test(rawSummary)) stories.push({ id: storyId(archiveDate, section, originalUrl, index), section, kicker: `${sourceName} · ${date}`, published: date, rawTitle, rawSummary, source: sourceName, url: originalUrl, time: "3 分钟" });
       }
     } catch (error) { console.warn(`RSS ${section} ${feedUrl} skipped: ${error.message}`); }
   }
-  const unique = stories.filter((story, index, all) => all.findIndex(candidate => candidate.url === story.url) === index);
+  const unique = stories.filter((story, index, all) => !blockedUrls.has(story.url) && all.findIndex(candidate => candidate.url === story.url) === index).sort((a, b) => b.published.localeCompare(a.published));
   if (unique.length < minimum) throw new Error(`refresh ${archiveDate} ${section} failed: only ${unique.length}/${minimum} real stories`);
   const translatedStories = [];
   for (const story of unique.slice(0, minimum)) {
@@ -181,7 +181,7 @@ async function fetchSection(section, feedUrls, minimum, archiveDate) {
   return translatedStories;
 }
 
-async function refreshDay(date) { return (await Promise.all(sections.map(([section, feedUrls, minimum]) => fetchSection(section, feedUrls, minimum, date)))).flat(); }
+async function refreshDay(date, previousStories = []) { const blockedUrls = new Set(previousStories.map(story => story.url)); return (await Promise.all(sections.map(([section, feedUrls, minimum]) => fetchSection(section, feedUrls, minimum, date, blockedUrls)))).flat(); }
 
 const todayDate = beijingDate(), file = "public/data/content.json";
 let previous = { today: [], archives: {}, knowledge: null, knowledgeArchives: {}, metadata: {} };
@@ -194,7 +194,7 @@ const dates = Array.from({ length: dayCount }, (_, index) => shiftDate(archiveSt
 const archives = { ...(previous.archives || {}) }, knowledgeArchives = { ...(previous.knowledgeArchives || {}) }, refreshResults = [];
 for (const date of dates) {
   if (date < minimumStart && Array.isArray(archives[date]) && archives[date].length) continue;
-  const stories = await refreshDay(date);
+  const stories = await refreshDay(date, archives[shiftDate(date, -1)] || []);
   archives[date] = stories; knowledgeArchives[date] = knowledgeForDate(date, stories);
   refreshResults.push({ date, sections: sections.length, stories: stories.length });
 }

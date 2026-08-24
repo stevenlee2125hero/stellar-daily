@@ -9,6 +9,11 @@ if (dates.length < 2) throw new Error(`Archive needs at least 2 days, found ${da
 for (let index = 1; index < dates.length; index++) {
   const expected = new Date(`${dates[index - 1]}T00:00:00Z`); expected.setUTCDate(expected.getUTCDate() + 1);
   if (dates[index] !== expected.toISOString().slice(0, 10)) throw new Error(`Archive gap: ${dates[index - 1]} -> ${dates[index]}`);
+  if (index === dates.length - 1) {
+    const previousUrls = new Set(data.archives[dates[index - 1]].map(story => story.url));
+    const repeated = data.archives[dates[index]].filter(story => previousUrls.has(story.url));
+    if (repeated.length) throw new Error(`${dates[index]} repeats ${repeated.length} source URLs from ${dates[index - 1]}`);
+  }
 }
 for (const date of dates) {
   const stories = data.archives[date];
