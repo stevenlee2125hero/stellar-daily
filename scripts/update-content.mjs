@@ -175,7 +175,7 @@ async function fetchSection(section, feedUrls, minimum, archiveDate, blockedUrls
   for (const story of unique.slice(0, Math.max(minimum * 4, minimum))) {
     const sourceText = await sourceDetail(story.url, story.rawSummary);
     const cleanedSource = sourceText.replaceAll(story.rawTitle, " ").replace(/\b[A-Z][A-Za-z.'’-]+(?:\s+[A-Z][A-Za-z.'’-]+){1,3}\s+\d{1,2}:\d{2}\s+[AP]M\s+[A-Z]{3}\s+·\s+[A-Z][a-z]+\s+\d{1,2},\s+\d{4}/g, " ").replace(/\s+/g, " ").trim();
-    const boilerplate = /跳转到内容|桌面徽标|移动徽标|切换大型菜单|提交站点搜索|fetch-start|34\|\|h|最新\s*\*\s*美国|CBS 新闻24\/7|FacebookTwitterPinterest/i;
+    const boilerplate = /skip to content|desktop logo|mobile logo|toggle mega menu|submit site search|跳转到内容|桌面徽标|移动徽标|切换大型菜单|提交站点搜索|fetch-start|34\|\|h|latest\s*\*\s*u\.s\.|最新\s*\*\s*美国|CBS News 24\/7|CBS 新闻24\/7|FacebookTwitterPinterest/i;
     const detail = (boilerplate.test(cleanedSource) ? story.rawSummary : cleanedSource).slice(0, 1800);
     const title = await translate(story.rawTitle), translated = await translate(detail);
     const summary = concise(translated);
