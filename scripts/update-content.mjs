@@ -10,7 +10,7 @@ const sections = [
   ["AI", ["https://techcrunch.com/category/artificial-intelligence/feed/", "https://venturebeat.com/category/ai/feed/", "https://www.technologyreview.com/topic/artificial-intelligence/feed", "https://www.marktechpost.com/feed/", "https://the-decoder.com/feed/", "https://www.artificialintelligence-news.com/feed/rss/"], 5],
   ["具身智能", ["https://rss.arxiv.org/rss/cs.RO", "https://techxplore.com/rss-feed/robotics-news/", "https://spectrum.ieee.org/feeds/topic/robotics.rss"], 6],
   ["科技", ["https://techcrunch.com/feed/", "https://feeds.arstechnica.com/arstechnica/index"], 6],
-  ["前沿科学", ["https://www.sciencedaily.com/rss/top/science.xml"], 6],
+  ["前沿科学", ["https://www.sciencedaily.com/rss/top/science.xml", "https://phys.org/rss-feed/", "https://scitechdaily.com/feed/", "https://www.livescience.com/feeds/all"], 6],
   ["新闻", ["https://www.france24.com/en/rss", "https://www.cbsnews.com/latest/rss/world", "https://abcnews.go.com/abcnews/internationalheadlines", "https://feeds.npr.org/1004/rss.xml"], 6],
 ];
 
