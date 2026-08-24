@@ -172,12 +172,16 @@ async function fetchSection(section, feedUrls, minimum, archiveDate, blockedUrls
   const unique = stories.filter((story, index, all) => !blockedUrls.has(story.url) && all.findIndex(candidate => candidate.url === story.url) === index).sort((a, b) => b.published.localeCompare(a.published));
   if (unique.length < minimum) throw new Error(`refresh ${archiveDate} ${section} failed: only ${unique.length}/${minimum} real stories`);
   const translatedStories = [];
-  for (const story of unique.slice(0, minimum)) {
+  for (const story of unique.slice(0, Math.max(minimum * 4, minimum))) {
     const sourceText = await sourceDetail(story.url, story.rawSummary);
     const detail = sourceText.replaceAll(story.rawTitle, " ").replace(/\b[A-Z][A-Za-z.'’-]+(?:\s+[A-Z][A-Za-z.'’-]+){1,3}\s+\d{1,2}:\d{2}\s+[AP]M\s+[A-Z]{3}\s+·\s+[A-Z][a-z]+\s+\d{1,2},\s+\d{4}/g, " ").replace(/\s+/g, " ").trim().slice(0, 1800);
     const title = await translate(story.rawTitle), translated = await translate(detail);
-    translatedStories.push({ id: story.id, section: story.section, kicker: story.kicker, title, summary: concise(translated), source: story.source, url: story.url, time: story.time });
+    const summary = concise(translated);
+    if (summary.length < 220) { console.warn(`RSS ${section} ${story.url} skipped: summary only ${summary.length} characters`); continue; }
+    translatedStories.push({ id: story.id, section: story.section, kicker: story.kicker, title, summary, source: story.source, url: story.url, time: story.time });
+    if (translatedStories.length >= minimum) break;
   }
+  if (translatedStories.length < minimum) throw new Error(`refresh ${archiveDate} ${section} failed after summary validation: only ${translatedStories.length}/${minimum}`);
   return translatedStories;
 }
 
