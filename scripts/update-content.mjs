@@ -8,7 +8,7 @@ const execFileAsync = promisify(execFile);
 const RETENTION_DAYS = 30;
 const sections = [
   ["AI", ["https://techcrunch.com/category/artificial-intelligence/feed/"], 5],
-  ["具身智能", ["https://spectrum.ieee.org/feeds/topic/robotics.rss"], 6],
+  ["具身智能", ["https://rss.arxiv.org/rss/cs.RO", "https://techxplore.com/rss-feed/robotics-news/", "https://spectrum.ieee.org/feeds/topic/robotics.rss"], 6],
   ["科技", ["https://techcrunch.com/feed/", "https://feeds.arstechnica.com/arstechnica/index"], 6],
   ["前沿科学", ["https://www.sciencedaily.com/rss/top/science.xml"], 6],
   ["新闻", ["https://www.france24.com/en/rss", "https://www.cbsnews.com/latest/rss/world", "https://abcnews.go.com/abcnews/internationalheadlines", "https://feeds.npr.org/1004/rss.xml"], 6],
@@ -48,7 +48,7 @@ async function fallbackTranslate(text) {
       const response = await fetchWithRetry(url, {}, 2, 10000);
       if (!response.ok) throw new Error(`fallback translation returned ${response.status}`);
       const data = await response.json();
-      translated.push(Array.isArray(data) ? data.join("") : data.translatedText);
+      translated.push(Array.isArray(data) ? (Array.isArray(data[0]) ? data[0].map(part => Array.isArray(part) ? part[0] : part).join("") : data[0]) : data.translatedText);
     } catch {
       if (process.platform === "win32") {
         const url = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=auto&tl=zh-CN&q=${encodeURIComponent(chunk)}`;
@@ -64,7 +64,7 @@ async function fallbackTranslate(text) {
       translated.push(data.responseData.translatedText);
     }
   }
-  return translated.join("").replace(/\s+/g, " ").trim();
+  return translated.join("").replace(/\s+/g, " ").replace(/(?:,|，)\s*(?:en|zh-CN)\b/gi, "").trim();
 }
 async function translate(text) {
   if (process.env.SKIP_TRANSLATION === "1") return text;
@@ -76,7 +76,7 @@ async function translate(text) {
       const response = await fetchWithRetry(url, {}, 2, 8000);
       if (!response.ok) throw new Error(`translation returned ${response.status}`);
       const data = await response.json();
-      return data[0].map(part => part[0]).join("").replace(/\s+/g, " ").trim();
+      return data[0].map(part => part[0]).join("").replace(/\s+/g, " ").replace(/(?:,|，)\s*(?:en|zh-CN)\b/gi, "").trim();
     } catch { primaryTranslationAvailable = false; return fallbackTranslate(text); }
   })());
   return translationCache.get(text);
@@ -117,7 +117,7 @@ async function sourceDetail(url, fallback) {
   return articleCache.get(url);
 }
 function concise(text, target = 300, maximum = 360) {
-  const normalized = text.replace(/…+/g, "。").replace(/\.{3,}/g, ".").replace(/\s+/g, " ").trim();
+  const normalized = text.replace(/(?:,|，)\s*(?:en|zh-CN)\b/gi, "").replace(/…+/g, "。").replace(/\.{3,}/g, ".").replace(/\s+/g, " ").trim();
   if (normalized.length <= maximum) return normalized;
   const sentences = normalized.split(/(?<=[。！？!?])\s*|(?<=\.)\s*(?=[A-Z“"'])/).filter(Boolean);
   let summary = "";
@@ -174,7 +174,9 @@ async function fetchSection(section, feedUrls, minimum, archiveDate, blockedUrls
   const translatedStories = [];
   for (const story of unique.slice(0, Math.max(minimum * 4, minimum))) {
     const sourceText = await sourceDetail(story.url, story.rawSummary);
-    const detail = sourceText.replaceAll(story.rawTitle, " ").replace(/\b[A-Z][A-Za-z.'’-]+(?:\s+[A-Z][A-Za-z.'’-]+){1,3}\s+\d{1,2}:\d{2}\s+[AP]M\s+[A-Z]{3}\s+·\s+[A-Z][a-z]+\s+\d{1,2},\s+\d{4}/g, " ").replace(/\s+/g, " ").trim().slice(0, 1800);
+    const cleanedSource = sourceText.replaceAll(story.rawTitle, " ").replace(/\b[A-Z][A-Za-z.'’-]+(?:\s+[A-Z][A-Za-z.'’-]+){1,3}\s+\d{1,2}:\d{2}\s+[AP]M\s+[A-Z]{3}\s+·\s+[A-Z][a-z]+\s+\d{1,2},\s+\d{4}/g, " ").replace(/\s+/g, " ").trim();
+    const boilerplate = /跳转到内容|桌面徽标|移动徽标|切换大型菜单|提交站点搜索|fetch-start|34\|\|h|最新\s*\*\s*美国|CBS 新闻24\/7|FacebookTwitterPinterest/i;
+    const detail = (boilerplate.test(cleanedSource) ? story.rawSummary : cleanedSource).slice(0, 1800);
     const title = await translate(story.rawTitle), translated = await translate(detail);
     const summary = concise(translated);
     if (summary.length < 220) { console.warn(`RSS ${section} ${story.url} skipped: summary only ${summary.length} characters`); continue; }
@@ -185,7 +187,7 @@ async function fetchSection(section, feedUrls, minimum, archiveDate, blockedUrls
   return translatedStories;
 }
 
-async function refreshDay(date, previousStories = []) { const blockedUrls = new Set(previousStories.map(story => story.url)); return (await Promise.all(sections.map(([section, feedUrls, minimum]) => fetchSection(section, feedUrls, minimum, date, blockedUrls)))).flat(); }
+async function refreshDay(date, previousStories = []) { const blockedUrls = new Set(previousStories.map(story => story.url)), [primary, ...rest] = sections, aiStories = await fetchSection(...primary, date, blockedUrls); for (const story of aiStories) blockedUrls.add(story.url); const remaining = await Promise.all(rest.map(([section, feedUrls, minimum]) => fetchSection(section, feedUrls, minimum, date, blockedUrls))); return [...aiStories, ...remaining.flat()]; }
 
 const todayDate = beijingDate(), file = "public/data/content.json";
 let previous = { today: [], archives: {}, knowledge: null, knowledgeArchives: {}, metadata: {} };

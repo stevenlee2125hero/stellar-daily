@@ -17,7 +17,7 @@ for (let index = 1; index < dates.length; index++) {
 }
 for (const date of dates) {
   const stories = data.archives[date];
-  const ids = new Set();
+  const ids = new Set(), urls = new Set();
   for (const story of stories) {
     for (const field of ["id", "section", "title", "summary", "source", "url"]) if (!story[field]) throw new Error(`${date}: story missing ${field}`);
     if (!/[\u4e00-\u9fff]/.test(story.title) || !/[\u4e00-\u9fff]/.test(story.summary)) throw new Error(`${date}: ${story.id} is not translated into Chinese`);
@@ -25,6 +25,7 @@ for (const date of dates) {
     if (/[…]|\.\.\.$/.test(story.summary)) throw new Error(`${date}: ${story.id} summary ends with an omission marker`);
     if (story.stale || /数据源重试中|自动重试|暂未取得足够/i.test(`${story.kicker} ${story.title} ${story.summary} ${story.full || ""}`)) throw new Error(`${date}: ${story.id} contains fallback/error content`);
     if (/这项更新涉及|核心信息：公开报道呈现|为什么值得关注：这类进展|核验建议：优先检查/i.test(`${story.summary} ${story.full || ""}`)) throw new Error(`${date}: ${story.id} contains generic filler content`);
+    if (/(?:,|，)\s*(?:en|zh-CN)\b|跳转到内容|桌面徽标|移动徽标|切换大型菜单|提交站点搜索|fetch-start|34\|\|h|最新\s*\*\s*美国|CBS 新闻24\/7|FacebookTwitterPinterest/i.test(`${story.title} ${story.summary}`)) throw new Error(`${date}: ${story.id} contains translation debris or website boilerplate`);
     if (!story.url.startsWith("https://") || story.url.includes("github.com/stevenlee2125hero/stellar-daily")) throw new Error(`${date}: ${story.id} does not link to a real source`);
     if ("image" in story) throw new Error(`${date}: ${story.id} still contains an image`);
     if (/&(?:amp;)?nbsp;|&lt;|&gt;|<\/?[a-z]|https?:\/\//i.test(`${story.summary} ${story.full || ""}`)) throw new Error(`${date}: ${story.id} contains markup or a raw URL in its body`);
@@ -32,7 +33,9 @@ for (const date of dates) {
     if (titleWithoutSource.length > 20 && story.summary.includes(titleWithoutSource)) throw new Error(`${date}: ${story.id} repeats its title in the summary`);
     if (story.full?.trim().startsWith(story.summary.trim())) throw new Error(`${date}: ${story.id} repeats its summary at the start of the full text`);
     if (ids.has(story.id)) throw new Error(`${date}: duplicate id ${story.id}`);
+    if (urls.has(story.url)) throw new Error(`${date}: duplicate source URL ${story.url}`);
     ids.add(story.id);
+    urls.add(story.url);
   }
   for (const [section, minimum] of Object.entries(required)) {
     const count = stories.filter(story => story.section === section).length;
