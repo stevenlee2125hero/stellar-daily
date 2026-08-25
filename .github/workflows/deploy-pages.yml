@@ -3,9 +3,10 @@ name: Update content and publish
 on:
   workflow_dispatch:
   schedule:
-    # Start at 01:17 Asia/Shanghai so GitHub queue delays still finish before 02:00.
-    # Avoiding the top of the hour also reduces scheduled-run congestion.
-    - cron: "17 17 * * *"
+    # Multiple idempotent attempts cover GitHub schedule delays and transient source failures.
+    # Asia/Shanghai: 00:07, 00:37, 01:07, 01:37, 02:07, 02:37 and 03:07.
+    - cron: "7,37 16,17,18 * * *"
+    - cron: "7 19 * * *"
 
 permissions:
   contents: write
@@ -19,33 +20,51 @@ concurrency:
 jobs:
   update-and-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Check whether today is already online
+        id: freshness
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "needs_update=true" >> "$GITHUB_OUTPUT"
+          elif node scripts/check-site-current.mjs; then
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needs_update=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Setup Node
+        if: steps.freshness.outputs.needs_update == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - name: Setup Python
+        if: steps.freshness.outputs.needs_update == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Install dependencies
+        if: steps.freshness.outputs.needs_update == 'true'
         run: npm ci
       - name: Update content
+        if: steps.freshness.outputs.needs_update == 'true'
         run: npm run update:content
       - name: Generate Xiaoxiao speech audio
+        if: steps.freshness.outputs.needs_update == 'true'
         run: |
           python -m pip install edge-tts==7.2.8
           python scripts/generate-audio.py
       - name: Validate continuous archive
+        if: steps.freshness.outputs.needs_update == 'true'
         run: npm run validate:content
       - name: Commit refreshed content
+        if: steps.freshness.outputs.needs_update == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -54,13 +73,20 @@ jobs:
           git pull --rebase origin main
           git push origin HEAD:main
       - name: Build static site
+        if: steps.freshness.outputs.needs_update == 'true'
         run: npm run build
       - name: Configure Pages
+        if: steps.freshness.outputs.needs_update == 'true'
         uses: actions/configure-pages@v5
       - name: Upload Pages artifact
+        if: steps.freshness.outputs.needs_update == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist
       - name: Deploy to GitHub Pages
+        if: steps.freshness.outputs.needs_update == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
+      - name: Verify live deployment
+        if: steps.freshness.outputs.needs_update == 'true'
+        run: node scripts/verify-deployment.mjs

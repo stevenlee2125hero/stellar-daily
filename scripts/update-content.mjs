@@ -194,22 +194,17 @@ async function refreshDay(date, previousStories = []) { const blockedUrls = new 
 const todayDate = beijingDate(), file = "public/data/content.json";
 let previous = { today: [], archives: {}, knowledge: null, knowledgeArchives: {}, metadata: {} };
 try { previous = JSON.parse(await readFile(file, "utf8")); } catch { /* First run starts a new archive. */ }
-const existingDates = Object.keys(previous.archives || {}).filter(date => date <= todayDate).sort();
-const retentionStart = shiftDate(todayDate, 1 - RETENTION_DAYS), minimumStart = shiftDate(todayDate, -3);
-const archiveStart = existingDates.length && existingDates[0] < minimumStart ? existingDates[0] : minimumStart;
-const dayCount = Math.round((new Date(`${todayDate}T00:00:00Z`).getTime() - new Date(`${archiveStart}T00:00:00Z`).getTime()) / 86400000) + 1;
-const dates = Array.from({ length: dayCount }, (_, index) => shiftDate(archiveStart, index)).filter(date => date >= retentionStart);
-const archives = { ...(previous.archives || {}) }, knowledgeArchives = { ...(previous.knowledgeArchives || {}) }, refreshResults = [];
-for (const date of dates) {
-  if (date < minimumStart && Array.isArray(archives[date]) && archives[date].length) continue;
-  const allPreviousStories = Object.entries(archives).filter(([archiveDate]) => archiveDate < date).flatMap(([, stories]) => stories);
-  const stories = await refreshDay(date, allPreviousStories);
-  archives[date] = stories; knowledgeArchives[date] = knowledgeForDate(date, stories);
-  refreshResults.push({ date, sections: sections.length, stories: stories.length });
+const existingToday = previous.archives?.[todayDate];
+if (Array.isArray(existingToday) && existingToday.length) {
+  console.log(`Archive ${todayDate} already exists (${existingToday.length} stories); immutable archive left unchanged`);
+} else {
+  const retentionStart = shiftDate(todayDate, 1 - RETENTION_DAYS), archives = { ...(previous.archives || {}) }, knowledgeArchives = { ...(previous.knowledgeArchives || {}) };
+  for (const key of Object.keys(archives)) if (key < retentionStart || key > todayDate) delete archives[key];
+  for (const key of Object.keys(knowledgeArchives)) if (key < retentionStart || key > todayDate) delete knowledgeArchives[key];
+  const allPreviousStories = Object.entries(archives).filter(([archiveDate]) => archiveDate < todayDate).flatMap(([, stories]) => stories);
+  const today = await refreshDay(todayDate, allPreviousStories), knowledge = knowledgeForDate(todayDate, today);
+  archives[todayDate] = today; knowledgeArchives[todayDate] = knowledge;
+  await mkdir("public/data", { recursive: true });
+  await writeFile(file, JSON.stringify({ today, archives, knowledge, knowledgeArchives, metadata: { updatedAt: new Date().toISOString(), timeZone: "Asia/Shanghai", retentionDays: RETENTION_DAYS, sourceWindow: "current-day-only-immutable-archive", refreshResults: [{ date: todayDate, sections: sections.length, stories: today.length }] } }, null, 2) + "\n");
+  console.log(`Created immutable archive ${todayDate}: ${today.length} stories; archive days=${Object.keys(archives).length}`);
 }
-for (const key of Object.keys(archives)) if (!dates.includes(key)) delete archives[key];
-for (const key of Object.keys(knowledgeArchives)) if (!dates.includes(key)) delete knowledgeArchives[key];
-const today = archives[todayDate], knowledge = knowledgeArchives[todayDate];
-await mkdir("public/data", { recursive: true });
-await writeFile(file, JSON.stringify({ today, archives, knowledge, knowledgeArchives, metadata: { updatedAt: new Date().toISOString(), timeZone: "Asia/Shanghai", retentionDays: RETENTION_DAYS, sourceWindow: "previous-calendar-day-with-seven-day-recovery", refreshResults } }, null, 2) + "\n");
-console.log(`Updated ${todayDate}: ${today.length} stories; archive days=${Object.keys(archives).length}`);
