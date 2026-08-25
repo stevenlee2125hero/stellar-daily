@@ -54,10 +54,15 @@ for (const date of dates) {
 }
 const latest = dates.at(-1);
 if (JSON.stringify(data.today) !== JSON.stringify(data.archives[latest])) throw new Error("today does not match latest archive");
+const knowledgeTitles = new Set(), knowledgeBodies = new Set();
 for (const date of dates) {
   const knowledge = data.knowledgeArchives?.[date];
   if (!knowledge?.title || !knowledge?.summary || !knowledge?.full || !knowledge?.url) throw new Error(`${date}: incomplete core knowledge lesson`);
   if (knowledge.full.length < 900) throw new Error(`${date}: core knowledge lesson is too short (${knowledge.full.length})`);
   for (const heading of ["今日为什么值得学", "一句话说明", "核心原理与关键流程", "解决什么问题、为什么重要", "适用与不适用场景", "具体产品案例", "与相近技术的区别和组合关系", "产品经理需要掌握的设计要点、指标与常见坑", "推荐原始论文与技术报告"]) if (!knowledge.full.includes(heading)) throw new Error(`${date}: core knowledge lesson missing ${heading}`);
+  const normalizedTitle = knowledge.title.trim().toLocaleLowerCase(), normalizedBody = knowledge.full.trim();
+  if (knowledgeTitles.has(normalizedTitle)) throw new Error(`${date}: core knowledge title repeats an earlier day: ${knowledge.title}`);
+  if (knowledgeBodies.has(normalizedBody)) throw new Error(`${date}: core knowledge body repeats an earlier day`);
+  knowledgeTitles.add(normalizedTitle); knowledgeBodies.add(normalizedBody);
 }
 console.log(`Content valid: ${dates.length} continuous days (${dates[0]}..${latest}), ${data.today.length} current stories`);

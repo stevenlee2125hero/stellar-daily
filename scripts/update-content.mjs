@@ -148,13 +148,28 @@ const knowledgeCurriculum = [
   { title: "Agent：让模型围绕目标持续行动", what: "Agent 是能观察环境、制定步骤、调用工具、检查结果并继续行动的大模型系统。", principle: "典型循环是观察、推理、行动、获得反馈、更新计划，直到完成目标或触发停止条件。", solves: "它适合跨多个系统和步骤的开放任务，但会放大模型错误、权限和成本风险。", suited: "适合研究、编码、数据分析和工作流自动化；不适合不可逆高风险操作或可由确定流程直接完成的任务。", example: "旅行助手比较航班、检查日历、生成方案并等待用户确认后再预订，其中确认边界是关键产品设计。", relation: "Harness 提供运行框架，MCP 连接工具，RAG 提供资料，模型负责决策，评测系统判断整个任务是否成功。", pm: "重点看任务成功率、步骤数、失败恢复率、人工确认点、权限最小化和预算上限。常见坑是给 Agent 过宽权限或没有明确停止条件。", papers: "推荐阅读：ReAct（https://arxiv.org/abs/2210.03629），理解推理与行动；Reflexion（https://arxiv.org/abs/2303.11366），理解反馈式改进；Voyager（https://arxiv.org/abs/2305.16291），理解长期技能积累。" },
   { title: "MCP：用统一协议连接模型与工具", what: "MCP 是让 AI 应用以统一方式发现并调用数据、资源和工具的开放协议。", principle: "Host 管理用户体验与权限，Client 与具体 Server 建立连接，Server 暴露工具、资源和提示模板，双方通过标准消息交换能力与结果。", solves: "它减少每个 AI 产品为不同系统重复开发专用连接器的成本，并让权限边界更清晰。", suited: "适合连接数据库、文档、开发工具和企业系统；不适合把所有内部接口无差别暴露给模型。", example: "开发助手通过不同 MCP Server 读取设计稿、查询工单和运行测试，而应用统一管理授权与审计。", relation: "MCP 解决连接标准，Agent 决定何时调用，Harness 管理调用流程，API 则仍是 Server 背后的具体实现方式。", pm: "重点掌握工具描述质量、最小权限、确认机制、幂等性、超时、错误回传和审计。常见坑是工具命名含糊或把敏感写操作设计成默认自动执行。", papers: "推荐阅读：MCP 规范（https://modelcontextprotocol.io/specification），理解协议本身；MCP GitHub（https://github.com/modelcontextprotocol），查看 SDK 与参考实现；Anthropic MCP 介绍（https://www.anthropic.com/news/model-context-protocol），理解其设计动机。" },
 ];
-function knowledgeForDate(date, stories) {
+function knowledgeForDate(date, stories, usedTitles = new Set()) {
   const signals = [/harness|工作流|编排|工具调用|agent|智能体/i, /rag|检索|知识库|向量/i, /transformer|注意力|上下文/i, /agent|智能体|自主|执行任务/i, /mcp|模型上下文协议|连接器/i];
   const corpus = stories.filter(story => story.section === "AI").map(story => `${story.title} ${story.summary}`).join(" "), ranked = knowledgeCurriculum.map((item, index) => ({ item, score: (corpus.match(new RegExp(signals[index].source, "gi")) || []).length })).sort((a, b) => b.score - a.score);
-  const selected = ranked[0], item = selected.item, related = stories.filter(story => story.section === "AI" && signals[knowledgeCurriculum.indexOf(item)].test(`${story.title} ${story.summary}`)).slice(0, 2).map(story => `《${story.title}》`).join("、") || "当天模型、工具调用与产品落地动态";
+  const selected = ranked.find(candidate => !usedTitles.has(candidate.item.title.trim().toLocaleLowerCase())), selectedIndex = selected ? knowledgeCurriculum.indexOf(selected.item) : -1, hotStory = stories.find(story => story.section === "AI") || stories[0];
+  const item = selected?.item || { title: `热点拆解：${hotStory.title}`, what: `今天围绕“${hotStory.title}”建立一节从新闻事实走向技术判断的专题课。`, principle: `先拆分公开信息中的能力主张、系统组成、数据来源和评测条件，再判断结果究竟来自模型本身、外部工具、运行框架还是特定任务设置。只有把变量分开，才能避免把一次演示误认为通用能力。`, solves: `热点信息传播速度快，但标题往往省略适用范围、对照基线和失败条件。这套拆解方法帮助读者识别真正新增的能力、尚未验证的假设以及可能影响产品路线的信号。`, suited: `适合分析模型发布、Agent 产品、基准成绩、融资与产业合作；不适合仅凭二手摘要作高风险采购或政策判断。`, example: `以当天报道为例，先记录它声称解决的任务，再查清使用了哪些模型、工具、数据和人工步骤，随后寻找对照实验与失败案例，最后把结论改写成可测试的产品假设。`, relation: `它与技术尽调、实验设计和产品发现相连：新闻提供线索，原始资料提供证据，评测验证能力，产品实验判断用户价值，四者不能相互替代。`, pm: `需要记录证据等级、适用场景、关键依赖、潜在风险、验证成本和下一步实验。常见坑是只复述报道、忽略基线差异、把相关性当因果，或在没有真实任务集时讨论模型优劣。`, papers: `推荐阅读：当天原始报道（${hotStory.url}）；ReAct（https://arxiv.org/abs/2210.03629），理解模型与环境交互；HELM（https://arxiv.org/abs/2211.09110），理解多维度模型评测。` };
+  const related = selectedIndex >= 0 ? stories.filter(story => story.section === "AI" && signals[selectedIndex].test(`${story.title} ${story.summary}`)).slice(0, 2).map(story => `《${story.title}》`).join("、") || `《${hotStory.title}》` : `《${hotStory.title}》`;
   const full = `今日为什么值得学\n今天的公开信息中，${related}都指向同一个趋势：模型竞争正在从单次回答能力，转向更完整、更可靠的系统能力。因此今天选择“${item.title.split("：")[0]}”作为重点。\n\n一句话说明\n${item.what}\n\n核心原理与关键流程\n${item.principle}\n实际产品通常还要加入输入检查、上下文管理、失败回退、结果验证和全链路日志，任何一个环节缺失，都可能让演示效果无法稳定复现。\n\n解决什么问题、为什么重要\n${item.solves}\n评价它时不能只看单次生成质量，而要看完整任务是否成功、证据是否可追溯，以及失败后是否能够安全恢复。\n\n适用与不适用场景\n${item.suited}\n产品设计应先判断任务是否需要概率推理，再决定是否引入模型，避免把确定性流程复杂化。\n\n具体产品案例\n${item.example}\n案例中的价值来自完整流程，而不只是某一次模型回答。\n\n与相近技术的区别和组合关系\n${item.relation}\n这些技术通常组合使用，但各自解决的问题不同，不能用一个概念替代整套系统。\n\n产品经理需要掌握的设计要点、指标与常见坑\n${item.pm}\n上线前应建立真实任务集，覆盖正常路径、边界条件、工具失败、权限不足和需要人工确认的情况。\n\n推荐原始论文与技术报告\n${item.papers}`;
   const formattedFull = full.replace(/^(今日为什么值得学|一句话说明|核心原理与关键流程|解决什么问题、为什么重要|适用与不适用场景|具体产品案例|与相近技术的区别和组合关系|产品经理需要掌握的设计要点、指标与常见坑|推荐原始论文与技术报告)$/gm, "▍ $1");
   return { id: `knowledge-${date}`, section: "大模型知识", kicker: `热点筛选 · ${date}`, title: item.title, summary: `${item.what} 本期结合当天最值得关注的公开动态，讲清原理、适用边界、产品案例和落地指标。`, full: formattedFull, source: "原始论文与官方技术资料", url: item.papers.match(/https:\/\/[^）]+/)?.[0] || "https://arxiv.org/", time: "12 分钟" };
+}
+
+function rebuildKnowledgeArchives(archives, existing = {}) {
+  const result = {}, usedTitles = new Set(), usedFull = new Set(); let changed = false;
+  for (const date of Object.keys(archives).sort()) {
+    const current = existing[date], title = current?.title?.trim().toLocaleLowerCase();
+    const reusable = current?.full && title && !usedTitles.has(title) && !usedFull.has(current.full.trim());
+    const lesson = reusable ? current : knowledgeForDate(date, archives[date], usedTitles);
+    if (!reusable) changed = true;
+    result[date] = lesson; usedTitles.add(lesson.title.trim().toLocaleLowerCase()); usedFull.add(lesson.full.trim());
+  }
+  if (Object.keys(existing).some(date => !result[date])) changed = true;
+  return { knowledgeArchives: result, changed };
 }
 
 async function fetchSection(section, feedUrls, minimum, archiveDate, blockedUrls = new Set(), blockedTitles = new Set()) {
@@ -194,17 +209,20 @@ async function refreshDay(date, previousStories = []) { const blockedUrls = new 
 const todayDate = beijingDate(), file = "public/data/content.json";
 let previous = { today: [], archives: {}, knowledge: null, knowledgeArchives: {}, metadata: {} };
 try { previous = JSON.parse(await readFile(file, "utf8")); } catch { /* First run starts a new archive. */ }
-const existingToday = previous.archives?.[todayDate];
-if (Array.isArray(existingToday) && existingToday.length) {
-  console.log(`Archive ${todayDate} already exists (${existingToday.length} stories); immutable archive left unchanged`);
-} else {
-  const retentionStart = shiftDate(todayDate, 1 - RETENTION_DAYS), archives = { ...(previous.archives || {}) }, knowledgeArchives = { ...(previous.knowledgeArchives || {}) };
-  for (const key of Object.keys(archives)) if (key < retentionStart || key > todayDate) delete archives[key];
-  for (const key of Object.keys(knowledgeArchives)) if (key < retentionStart || key > todayDate) delete knowledgeArchives[key];
+const retentionStart = shiftDate(todayDate, 1 - RETENTION_DAYS), archives = { ...(previous.archives || {}) }; let knowledgeArchives = { ...(previous.knowledgeArchives || {}) }, changed = false, refreshResults = [];
+for (const key of Object.keys(archives)) if (key < retentionStart || key > todayDate) { delete archives[key]; changed = true; }
+for (const key of Object.keys(knowledgeArchives)) if (key < retentionStart || key > todayDate) { delete knowledgeArchives[key]; changed = true; }
+const existingToday = archives[todayDate];
+if (!Array.isArray(existingToday) || !existingToday.length) {
   const allPreviousStories = Object.entries(archives).filter(([archiveDate]) => archiveDate < todayDate).flatMap(([, stories]) => stories);
-  const today = await refreshDay(todayDate, allPreviousStories), knowledge = knowledgeForDate(todayDate, today);
-  archives[todayDate] = today; knowledgeArchives[todayDate] = knowledge;
+  const today = await refreshDay(todayDate, allPreviousStories);
+  archives[todayDate] = today; changed = true; refreshResults = [{ date: todayDate, sections: sections.length, stories: today.length }];
+  console.log(`Created immutable archive ${todayDate}: ${today.length} stories`);
+} else console.log(`Archive ${todayDate} already exists (${existingToday.length} stories); news archive left unchanged`);
+const rebuilt = rebuildKnowledgeArchives(archives, knowledgeArchives); knowledgeArchives = rebuilt.knowledgeArchives; changed ||= rebuilt.changed;
+if (changed) {
+  const today = archives[todayDate], knowledge = knowledgeArchives[todayDate];
   await mkdir("public/data", { recursive: true });
-  await writeFile(file, JSON.stringify({ today, archives, knowledge, knowledgeArchives, metadata: { updatedAt: new Date().toISOString(), timeZone: "Asia/Shanghai", retentionDays: RETENTION_DAYS, sourceWindow: "current-day-only-immutable-archive", refreshResults: [{ date: todayDate, sections: sections.length, stories: today.length }] } }, null, 2) + "\n");
-  console.log(`Created immutable archive ${todayDate}: ${today.length} stories; archive days=${Object.keys(archives).length}`);
-}
+  await writeFile(file, JSON.stringify({ today, archives, knowledge, knowledgeArchives, metadata: { updatedAt: new Date().toISOString(), timeZone: "Asia/Shanghai", retentionDays: RETENTION_DAYS, sourceWindow: "current-day-only-immutable-archive", refreshResults } }, null, 2) + "\n");
+  console.log(`Updated ${todayDate}: ${today.length} stories; ${Object.keys(knowledgeArchives).length} unique daily knowledge lessons`);
+} else console.log(`All ${Object.keys(knowledgeArchives).length} daily knowledge lessons are already unique; file unchanged`);

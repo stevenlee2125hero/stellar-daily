@@ -20,9 +20,19 @@ for (let attempt = 1; attempt <= 12; attempt++) {
       const count = data.today.filter(story => story.section === section).length;
       if (count < minimum) throw new Error(`${section} has ${count}/${minimum}`);
     }
+    const knowledgeTitles = new Set(), knowledgeBodies = new Set();
+    for (const date of dates) {
+      const lesson = data.knowledgeArchives?.[date];
+      if (!lesson?.title || !lesson?.full) throw new Error(`missing knowledge lesson for ${date}`);
+      const title = lesson.title.trim().toLocaleLowerCase(), body = lesson.full.trim();
+      if (knowledgeTitles.has(title)) throw new Error(`duplicate knowledge title ${lesson.title}`);
+      if (knowledgeBodies.has(body)) throw new Error(`duplicate knowledge body for ${date}`);
+      knowledgeTitles.add(title); knowledgeBodies.add(body);
+    }
+    if (data.knowledge?.id !== data.knowledgeArchives?.[latest]?.id) throw new Error("current knowledge does not match latest archive");
     const audioStatuses = await Promise.all(data.today.map(story => fetch(new URL(story.audio, site), { method: "HEAD", signal: AbortSignal.timeout(15000) }).then(result => result.status)));
     if (audioStatuses.some(status => status !== 200)) throw new Error(`${audioStatuses.filter(status => status !== 200).length} audio files unavailable`);
-    console.log(`Deployment verified: ${latest}, ${data.today.length} stories, ${audioStatuses.length} audio files, ${all.length} archive URLs unique`);
+    console.log(`Deployment verified: ${latest}, ${data.today.length} stories, ${audioStatuses.length} audio files, ${all.length} archive URLs and ${knowledgeTitles.size} knowledge lessons unique`);
     process.exit(0);
   } catch (error) {
     lastError = error;
