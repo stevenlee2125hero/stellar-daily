@@ -10,7 +10,7 @@ const sections = [
   ["AI", ["https://techcrunch.com/category/artificial-intelligence/feed/", "https://venturebeat.com/category/ai/feed/", "https://www.technologyreview.com/topic/artificial-intelligence/feed", "https://www.marktechpost.com/feed/", "https://the-decoder.com/feed/", "https://www.artificialintelligence-news.com/feed/rss/"], 5],
   ["具身智能", ["https://rss.arxiv.org/rss/cs.RO", "https://techxplore.com/rss-feed/robotics-news/", "https://spectrum.ieee.org/feeds/topic/robotics.rss"], 6],
   ["科技", ["https://techcrunch.com/feed/", "https://feeds.arstechnica.com/arstechnica/index"], 6],
-  ["前沿科学", ["https://www.sciencedaily.com/rss/top/science.xml", "https://phys.org/rss-feed/", "https://scitechdaily.com/feed/", "https://www.livescience.com/feeds/all"], 6],
+  ["前沿科学", ["https://www.sciencedaily.com/rss/top/science.xml", "https://phys.org/rss-feed/", "https://rss.arxiv.org/rss/physics", "https://rss.arxiv.org/rss/q-bio", "https://scitechdaily.com/feed/", "https://www.livescience.com/feeds/all"], 6],
   ["新闻", ["https://www.france24.com/en/rss", "https://feeds.skynews.com/feeds/rss/world.xml", "https://www.cbsnews.com/latest/rss/world", "https://abcnews.go.com/abcnews/internationalheadlines", "https://feeds.npr.org/1004/rss.xml"], 6],
 ];
 
@@ -21,6 +21,13 @@ function tag(item, name) { return clean(item.match(new RegExp(`<${name}[^>]*>([\
 function rawTag(item, name) { return (item.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)</${name}>`, "i"))?.[1] || "").replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").trim(); }
 function shiftDate(date, days) { const value = new Date(`${date}T00:00:00Z`); value.setUTCDate(value.getUTCDate() + days); return value.toISOString().slice(0, 10); }
 function storyId(date, section, url, index) { return `daily-${date}-${section}-${createHash("sha1").update(`${url}-${index}`).digest("hex").slice(0, 10)}`; }
+async function mapLimit(items, limit, worker) {
+  const results = new Array(items.length); let cursor = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) { const index = cursor++; results[index] = await worker(items[index]); }
+  }));
+  return results;
+}
 function beijingDate() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); }
 
 function sourceFromUrl(value) { try { return new URL(value).hostname.replace(/^www\./, ""); } catch { return ""; } }
@@ -187,19 +194,19 @@ async function fetchSection(section, feedUrls, minimum, archiveDate, blockedUrls
   }
   const unique = stories.filter((story, index, all) => !blockedUrls.has(story.url) && all.findIndex(candidate => candidate.url === story.url) === index).sort((a, b) => b.published.localeCompare(a.published));
   if (unique.length < minimum) throw new Error(`refresh ${archiveDate} ${section} failed: only ${unique.length}/${minimum} real stories`);
-  const translatedStories = [];
-  for (const story of unique.slice(0, Math.max(minimum * 4, minimum))) {
+  const processed = await mapLimit(unique.slice(0, Math.max(minimum * 4, minimum)), 5, async story => {
     const sourceText = await sourceDetail(story.url, story.rawSummary);
     const cleanedSource = sourceText.replaceAll(story.rawTitle, " ").replace(/\b[A-Z][A-Za-z.'’-]+(?:\s+[A-Z][A-Za-z.'’-]+){1,3}\s+\d{1,2}:\d{2}\s+[AP]M\s+[A-Z]{3}\s+·\s+[A-Z][a-z]+\s+\d{1,2},\s+\d{4}/g, " ").replace(/\s+/g, " ").trim();
     const boilerplate = /skip to content|desktop logo|mobile logo|toggle mega menu|submit site search|跳转到内容|桌面徽标|移动徽标|切换大型菜单|提交站点搜索|fetch-start|34\|\|h|latest\s*\*\s*u\.s\.|最新\s*\*\s*美国|CBS News 24\/7|CBS 新闻24\/7|FacebookTwitterPinterest/i;
-    const detail = (boilerplate.test(cleanedSource) ? story.rawSummary : cleanedSource).slice(0, 1800);
+    const primaryDetail = boilerplate.test(cleanedSource) ? story.rawSummary : cleanedSource;
+    const detail = `${primaryDetail} ${story.rawSummary}`.replace(/(.{80,}?)\s+\1/g, "$1").replace(/\s+/g, " ").trim().slice(0, 2400);
     const title = await translate(story.rawTitle), translated = await translate(detail);
-    if (blockedTitles.has(title.trim().toLocaleLowerCase())) { console.warn(`RSS ${section} ${story.url} skipped: title already exists in archive`); continue; }
+    if (blockedTitles.has(title.trim().toLocaleLowerCase())) { console.warn(`RSS ${section} ${story.url} skipped: title already exists in archive`); return null; }
     const summary = concise(translated);
-    if (summary.length < 220) { console.warn(`RSS ${section} ${story.url} skipped: summary only ${summary.length} characters`); continue; }
-    translatedStories.push({ id: story.id, section: story.section, kicker: story.kicker, title, summary, source: story.source, url: story.url, time: story.time });
-    if (translatedStories.length >= minimum) break;
-  }
+    if (summary.length < 220) { console.warn(`RSS ${section} ${story.url} skipped: summary only ${summary.length} characters`); return null; }
+    return { id: story.id, section: story.section, kicker: story.kicker, title, summary, source: story.source, url: story.url, time: story.time };
+  });
+  const translatedStories = processed.filter(Boolean).slice(0, minimum);
   if (translatedStories.length < minimum) throw new Error(`refresh ${archiveDate} ${section} failed after summary validation: only ${translatedStories.length}/${minimum}`);
   return translatedStories;
 }
@@ -212,13 +219,17 @@ try { previous = JSON.parse(await readFile(file, "utf8")); } catch { /* First ru
 const retentionStart = shiftDate(todayDate, 1 - RETENTION_DAYS), archives = { ...(previous.archives || {}) }; let knowledgeArchives = { ...(previous.knowledgeArchives || {}) }, changed = false, refreshResults = [];
 for (const key of Object.keys(archives)) if (key < retentionStart || key > todayDate) { delete archives[key]; changed = true; }
 for (const key of Object.keys(knowledgeArchives)) if (key < retentionStart || key > todayDate) { delete knowledgeArchives[key]; changed = true; }
-const existingToday = archives[todayDate];
-if (!Array.isArray(existingToday) || !existingToday.length) {
-  const allPreviousStories = Object.entries(archives).filter(([archiveDate]) => archiveDate < todayDate).flatMap(([, stories]) => stories);
-  const today = await refreshDay(todayDate, allPreviousStories);
-  archives[todayDate] = today; changed = true; refreshResults = [{ date: todayDate, sections: sections.length, stories: today.length }];
-  console.log(`Created immutable archive ${todayDate}: ${today.length} stories`);
-} else console.log(`Archive ${todayDate} already exists (${existingToday.length} stories); news archive left unchanged`);
+const existingDates = Object.keys(archives).sort();
+const firstMissingDate = existingDates.length ? shiftDate(existingDates.at(-1), 1) : todayDate;
+const missingDates = [];
+for (let date = firstMissingDate; date <= todayDate; date = shiftDate(date, 1)) missingDates.push(date);
+if (!missingDates.length) console.log(`Archive ${todayDate} already exists (${archives[todayDate].length} stories); news archive left unchanged`);
+for (const date of missingDates) {
+  const allPreviousStories = Object.entries(archives).filter(([archiveDate]) => archiveDate < date).flatMap(([, stories]) => stories);
+  const stories = await refreshDay(date, allPreviousStories);
+  archives[date] = stories; changed = true; refreshResults.push({ date, sections: sections.length, stories: stories.length });
+  console.log(`Created immutable archive ${date}: ${stories.length} stories`);
+}
 const rebuilt = rebuildKnowledgeArchives(archives, knowledgeArchives); knowledgeArchives = rebuilt.knowledgeArchives; changed ||= rebuilt.changed;
 if (changed) {
   const today = archives[todayDate], knowledge = knowledgeArchives[todayDate];
